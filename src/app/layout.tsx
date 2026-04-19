@@ -1,14 +1,11 @@
 import './globals.css'
-import { Inter } from 'next/font/google'
-import Navbar from '../components/navbar'
-import Footer from '../components/footer'
-
 import { Montserrat } from "next/font/google"
+import LayoutWrapper from "./layoutWrapper"
 
 const montserrat = Montserrat({
   subsets: ["latin"],
   weight: ["300", "400", "500", "600", "700"],
-  variable: "--font-montserrat", // optional (untuk Tailwind)
+  variable: "--font-montserrat",
 })
 
 export const metadata = {
@@ -23,10 +20,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="id">
-      <body className={`${montserrat.variable} bg-pink-50`} >
-        <Navbar />
-        {children}
-        <Footer />
+      <body className={`${montserrat.variable} bg-pink-50`}>
+        <LayoutWrapper>
+          {children}
+        </LayoutWrapper>
       </body>
     </html>
   )
