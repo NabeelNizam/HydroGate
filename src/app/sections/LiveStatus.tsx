@@ -87,14 +87,9 @@ export default function LiveStatus() {
             id="live-status"
             className="relative py-28 px-6 transition-colors duration-500 bg-gradient-to-b from-[#020d1a] via-[#04111f] to-[#05182b]"
         >
-            {/* BG accent */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none">
                 <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-900/50 to-transparent" />
-
-                {/* Glow utama */}
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-cyan-500/10 rounded-full blur-[120px] opacity-0 group-[.active]:opacity-100 transition-opacity duration-700" />
-
-                {/* tambahan subtle */}
                 <div className="absolute top-[20%] right-[10%] w-[300px] h-[300px] bg-blue-500/10 rounded-full blur-[100px] opacity-0 group-[.active]:opacity-100 transition-opacity duration-700" />
             </div>
 
@@ -109,7 +104,6 @@ export default function LiveStatus() {
             </div>
 
             <div className="max-w-6xl mx-auto">
-                {/* Header */}
                 <div className="text-center mb-14">
                     <p className="text-cyan-400 text-xs font-semibold tracking-widest uppercase mb-4">
                         Status Terkini
@@ -127,7 +121,7 @@ export default function LiveStatus() {
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-                    {/* Gate selector */}
+                    
                     <div className="flex flex-col gap-3">
                         {gates.map((g, i) => (
                             <button
@@ -155,14 +149,14 @@ export default function LiveStatus() {
                         ))}
                     </div>
 
-                    {/* Main card */}
+                    
                     <div className="lg:col-span-2 relative p-7 rounded-2xl bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/[0.08] glow-border transition-all duration-300 overflow-hidden">
-                        {/* Corner decoration */}
+                        
                         <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-bl-[80px]" />
                         <div className="absolute top-4 right-4 w-16 h-16 border border-cyan-500/10 rounded-full" />
 
                         <div className="relative">
-                            {/* Header row */}
+                            
                             <div className="flex items-start justify-between mb-6">
                                 <div>
                                     <div className="flex items-center gap-2 mb-1">
@@ -180,7 +174,7 @@ export default function LiveStatus() {
                                 <GateStatusBadge open={gate.open} />
                             </div>
 
-                            {/* Big number */}
+                            
                             <div className="flex items-end gap-3 mb-8">
                                 <span className=" font-extrabold text-6xl md:text-7xl bg-gradient-to-br from-cyan-200 to-cyan-500 bg-clip-text text-transparent ticker">
                                     {level.toFixed(2)}
@@ -191,10 +185,10 @@ export default function LiveStatus() {
                                 </div>
                             </div>
 
-                            {/* Water bar */}
+                            
                             <WaterLevelBar level={level} max={gate.max} />
 
-                            {/* Info grid */}
+                            
                             <div className="grid grid-cols-3 gap-3 mt-6">
                                 {[
                                     { label: "Status Pintu", value: gate.open ? "Terbuka" : "Tertutup" },

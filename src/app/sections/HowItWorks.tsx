@@ -69,7 +69,7 @@ export default function HowItWorks() {
             </div>
 
             <div className="max-w-5xl mx-auto">
-                {/* Header */}
+                
                 <div className="text-center mb-16">
                     <p className="text-cyan-400 text-xs font-semibold tracking-widest uppercase mb-4">
                         Cara Kerja
@@ -83,9 +83,9 @@ export default function HowItWorks() {
                     </p>
                 </div>
 
-                {/* Steps */}
+                
                 <div className="relative grid grid-cols-1 md:grid-cols-3 gap-8">
-                    {/* Connector line (desktop) */}
+                    
                     <div className="hidden md:block absolute top-14 left-[calc(16.66%+1rem)] right-[calc(16.66%+1rem)] h-px">
                         <div className="h-full bg-gradient-to-r from-cyan-500/30 via-blue-500/20 to-teal-500/30" />
                         <div className="absolute left-1/4 top-1/2 -translate-y-1/2 w-2 h-2 rounded-full bg-cyan-500/50" />
@@ -97,12 +97,12 @@ export default function HowItWorks() {
                             key={step.num}
                             className="relative group flex flex-col items-center text-center"
                         >
-                            {/* Circle */}
+                            
                             <div className="relative mb-6">
                                 <div className="w-28 h-28 rounded-full bg-gradient-to-br from-cyan-500/10 to-blue-500/10 border border-cyan-500/20 group-hover:border-cyan-400/40 flex items-center justify-center transition-all duration-300 group-hover:shadow-lg group-hover:shadow-cyan-500/10">
                                     <div className="text-cyan-400">{step.icon}</div>
                                 </div>
-                                {/* Step number badge */}
+                                
                                 <div className="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center">
                                     <span className=" font-bold text-xs text-white">
                                         {i + 1}
@@ -124,7 +124,7 @@ export default function HowItWorks() {
                     ))}
                 </div>
 
-                {/* CTA banner */}
+                
                 <div className="mt-20 relative overflow-hidden rounded-2xl bg-gradient-to-r from-cyan-900/30 via-blue-900/30 to-teal-900/30 border border-cyan-500/15 p-8 md:p-10 text-center">
                     <div className="absolute inset-0 opacity-30">
                         <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-400 to-transparent" />
