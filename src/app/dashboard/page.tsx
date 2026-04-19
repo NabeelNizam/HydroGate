@@ -1,14 +1,14 @@
 'use client';
 
-import Sidebar from '@/components/Sidebar';
-import Navbar from '@/components/Navbar';
-import StatusCard from '@/components/StatusCard';
-import WaterLevelChart from '@/components/WaterLevelChart';
-import GateControlPanel from '@/components/GateControlPanel';
-import ActivityLog from '@/components/ActivityLog';
+import Sidebar from './components/Sidebar';
+import Navbar from './components/Navbar';
+import StatusCard from './components/StatusCard';
+import WaterLevelChart from './components/WaterLevelChart';
+import GateControlPanel from './components/GateControlPanel';
+import ActivityLog from './components/ActivityLog';
 import { Droplet, Lock, Zap, AlertTriangle } from 'lucide-react';
 
-export default function Home() {
+export default function Dashboard() {
   return (
     <div className="flex bg-slate-50">
       {/* Sidebar */}
