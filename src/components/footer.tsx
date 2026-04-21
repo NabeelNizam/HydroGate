@@ -39,10 +39,15 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-white text-sm mb-4">Navigasi</h4>
             <ul className="space-y-2.5">
-              {["Home", "Monitoring", "Riwayat", "Login"].map((link) => (
-                <li key={link}>
-                  <a href="#" className="text-slate-500 text-sm hover:text-cyan-400 transition-colors duration-200">
-                    {link}
+              {[
+                { label: "Home", href: "/" },
+                { label: "Monitoring", href: "/dashboard/monitoring" },
+                { label: "Reports", href: "/dashboard/reports" },
+                { label: "Login", href: "/auth/login" }
+              ].map((link) => (
+                <li key={link.label}>
+                  <a href={link.href} className="text-slate-500 text-sm hover:text-cyan-400 transition-colors duration-200">
+                    {link.label}
                   </a>
                 </li>
               ))}
@@ -52,10 +57,15 @@ export default function Footer() {
           <div>
             <h4 className="font-semibold text-white text-sm mb-4">Sistem</h4>
             <ul className="space-y-2.5">
-              {["Status Sistem", "Dokumentasi API", "Panduan Admin", "Kontak"].map((link) => (
-                <li key={link}>
-                  <a href="#" className="text-slate-500 text-sm hover:text-cyan-400 transition-colors duration-200">
-                    {link}
+              {[
+                { label: "Activity Logs", href: "/dashboard/logs" },
+                { label: "Settings", href: "/dashboard/settings" },
+                { label: "Dokumentasi API", href: "#" },
+                { label: "Hubungi Kami", href: "#" }
+              ].map((link) => (
+                <li key={link.label}>
+                  <a href={link.href} className="text-slate-500 text-sm hover:text-cyan-400 transition-colors duration-200">
+                    {link.label}
                   </a>
                 </li>
               ))}
