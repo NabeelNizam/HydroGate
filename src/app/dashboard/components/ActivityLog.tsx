@@ -58,7 +58,7 @@ const createActivities = (): Activity[] => [
     id: '6',
     type: 'info',
     title: 'Sensor Calibration Done',
-    description: 'Gate C closed to prevent overflow',
+    description: 'Main Gate sensor berhasil dikalibrasi untuk akurasi maksimal',
     timestamp: new Date(Date.now() - 6 * 3600000),
     user: 'Sarah Johnson',
   },
