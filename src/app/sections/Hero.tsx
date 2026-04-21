@@ -15,18 +15,6 @@ export default function Hero() {
         let height = (canvas.height = canvas.offsetHeight);
         let frame = 0;
 
-        const particles: { x: number; y: number; r: number; speed: number; opacity: number; dx: number }[] = [];
-        for (let i = 0; i < 60; i++) {
-            particles.push({
-                x: Math.random() * width,
-                y: Math.random() * height,
-                r: Math.random() * 1.5 + 0.3,
-                speed: Math.random() * 0.3 + 0.1,
-                opacity: Math.random() * 0.5 + 0.1,
-                dx: (Math.random() - 0.5) * 0.2,
-            });
-        }
-
         const draw = () => {
             ctx.clearRect(0, 0, width, height);
             frame++;
@@ -45,20 +33,6 @@ export default function Hero() {
                 }
                 ctx.stroke();
             }
-
-            // Draw particles
-            particles.forEach((p) => {
-                p.y -= p.speed;
-                p.x += p.dx;
-                if (p.y < -5) {
-                    p.y = height + 5;
-                    p.x = Math.random() * width;
-                }
-                ctx.beginPath();
-                ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(34, 211, 238, ${p.opacity})`;
-                ctx.fill();
-            });
 
             requestAnimationFrame(draw);
         };

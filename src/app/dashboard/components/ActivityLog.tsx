@@ -13,51 +13,51 @@ interface Activity {
   user?: string;
 }
 
-const activities: Activity[] = [
+const createActivities = (): Activity[] => [
   {
     id: '1',
     type: 'alert',
-    title: 'Water Level Critical',
-    description: 'Water level exceeded critical threshold (82m)',
+    title: 'Water Level Critical - Auto Gate Open',
+    description: 'Water level exceeded 75m threshold - Main gate automatically opened to 85% capacity',
     timestamp: new Date(Date.now() - 5 * 60000),
-    user: 'System',
+    user: 'System (Auto)',
   },
   {
     id: '2',
-    type: 'success',
-    title: 'Gate A Opened Successfully',
-    description: 'Gate A opened to 75% capacity',
+    type: 'alert',
+    title: 'High Water Level Detected',
+    description: 'Current water level: 78m (Critical threshold: 75m)',
     timestamp: new Date(Date.now() - 15 * 60000),
-    user: 'John Davis',
+    user: 'Water Level Sensor',
   },
   {
     id: '3',
-    type: 'maintenance',
-    title: 'Gate D Under Maintenance',
-    description: 'Scheduled maintenance initiated on Gate D',
+    type: 'success',
+    title: 'Gate Auto-Closed Successfully',
+    description: 'Water level dropped to 68m - Main gate automatically closed to prevent overflow',
     timestamp: new Date(Date.now() - 1.5 * 3600000),
-    user: 'Maintenance Team',
+    user: 'System (Auto)',
   },
   {
     id: '4',
-    type: 'alert',
-    title: 'Flow Rate Anomaly',
-    description: 'Unusual flow rate detected on Gate B outlet',
+    type: 'info',
+    title: 'Auto-Control Mode Enabled',
+    description: 'Main gate switched to automatic control mode',
     timestamp: new Date(Date.now() - 2 * 3600000),
     user: 'System',
   },
   {
     id: '5',
-    type: 'info',
-    title: 'System Backup Completed',
-    description: 'Daily automated backup completed successfully',
+    type: 'success',
+    title: 'System Initialization Complete',
+    description: 'HydroGate monitoring system initialized with auto-control enabled',
     timestamp: new Date(Date.now() - 4 * 3600000),
     user: 'System',
   },
   {
     id: '6',
-    type: 'success',
-    title: 'Gate C Closed',
+    type: 'info',
+    title: 'Sensor Calibration Done',
     description: 'Gate C closed to prevent overflow',
     timestamp: new Date(Date.now() - 6 * 3600000),
     user: 'Sarah Johnson',
@@ -66,9 +66,11 @@ const activities: Activity[] = [
 
 export default function ActivityLog() {
   const [isClient, setIsClient] = useState(false);
+  const [activities, setActivities] = useState<Activity[]>([]);
 
   useEffect(() => {
     setIsClient(true);
+    setActivities(createActivities());
   }, []);
 
   const getActivityIcon = (type: string) => {

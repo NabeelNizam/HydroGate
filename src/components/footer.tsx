@@ -1,4 +1,14 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+
 export default function Footer() {
+  const [year, setYear] = useState<number | null>(null);
+
+  useEffect(() => {
+    setYear(new Date().getFullYear());
+  }, []);
+
   return (
     <footer className="relative border-t border-white/[0.06] py-14 px-6 bg-[#020d1a] mt-16">
       <div className="max-w-6xl mx-auto">
@@ -56,7 +66,7 @@ export default function Footer() {
         {/* Bottom bar */}
         <div className="pt-8 border-t border-white/[0.06] flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-slate-600 text-xs">
-            © {new Date().getFullYear()} AquaGate Monitor. Sistem Monitoring Pintu Air Bendungan.
+            © {year || new Date().getFullYear()} AquaGate Monitor. Sistem Monitoring Pintu Air Bendungan.
           </p>
           <div className="flex items-center gap-2">
             <span className="relative flex h-2 w-2">
