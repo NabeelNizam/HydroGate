@@ -61,21 +61,11 @@ const gates = [
 
 export default function LiveStatus() {
     const [mounted, setMounted] = useState(false);
-    const [time, setTime] = useState(new Date());
-    const [level, setLevel] = useState(gates[0].level);
+    const time = new Date();
+    const level = 2.3; // Fixed value instead of calculating
 
     useEffect(() => {
         setMounted(true);
-    }, []);
-
-    useEffect(() => {
-        const timer = setInterval(() => {
-            setTime(new Date());
-            setLevel((prev) =>
-                Math.max(0.5, Math.min(gates[0].max - 0.1, prev + (Math.random() - 0.5) * 0.04))
-            );
-        }, 1500);
-        return () => clearInterval(timer);
     }, []);
 
     const gate = gates[0];

@@ -1,52 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-
 export default function Hero() {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-
-    useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-
-        let width = (canvas.width = canvas.offsetWidth);
-        let height = (canvas.height = canvas.offsetHeight);
-        let frame = 0;
-
-        const draw = () => {
-            ctx.clearRect(0, 0, width, height);
-            frame++;
-
-            // Draw wave lines
-            for (let w = 0; w < 3; w++) {
-                ctx.beginPath();
-                ctx.strokeStyle = `rgba(34, 211, 238, ${0.03 + w * 0.02})`;
-                ctx.lineWidth = 1;
-                for (let x = 0; x <= width; x += 2) {
-                    const y =
-                        height * 0.55 +
-                        Math.sin((x / width) * Math.PI * 3 + frame * 0.012 + w * 1.2) * (20 + w * 15) +
-                        Math.sin((x / width) * Math.PI * 5 - frame * 0.008 + w) * (10 + w * 8);
-                    x === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-                }
-                ctx.stroke();
-            }
-
-            requestAnimationFrame(draw);
-        };
-
-        draw();
-
-        const handleResize = () => {
-            width = canvas.width = canvas.offsetWidth;
-            height = canvas.height = canvas.offsetHeight;
-        };
-        window.addEventListener("resize", handleResize);
-        return () => window.removeEventListener("resize", handleResize);
-    }, []);
-
     return (
         <section
             id="home"
@@ -60,10 +14,7 @@ export default function Hero() {
                 </div>
             </div>
 
-            <canvas
-                ref={canvasRef}
-                className="absolute inset-0 w-full h-full opacity-70"
-            />
+
 
             <div
                 className="absolute inset-0 opacity-[0.03]"
