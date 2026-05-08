@@ -25,39 +25,39 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
             <StatusCard
               title="Water Level"
-              value={75}
+              value={65}
               unit="meters"
               icon="💧"
-              status="warning"
+              status="normal"
               trend="up"
-              trendValue="+2.3m"
+              trendValue="+1.2m"
             />
             <StatusCard
               title="Gate Status"
-              value="3/4"
-              unit="Open"
+              value="1"
+              unit="Active"
               icon="🚪"
               status="normal"
               trend="down"
-              trendValue="-1 gate"
+              trendValue="Auto-Controlled"
             />
             <StatusCard
               title="Flow Rate"
-              value={3130}
+              value={1500}
               unit="m³/s"
               icon="⚡"
               status="normal"
               trend="up"
-              trendValue="+180 m³/s"
+              trendValue="+50 m³/s"
             />
             <StatusCard
               title="Alerts"
-              value={2}
+              value={0}
               unit="Active"
               icon="⚠️"
-              status="critical"
-              trend="up"
-              trendValue="+1 alert"
+              status="normal"
+              trend="down"
+              trendValue="All clear"
             />
           </div>
 

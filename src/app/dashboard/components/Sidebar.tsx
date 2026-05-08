@@ -2,18 +2,25 @@
 
 import { LayoutDashboard, BarChart3, ClipboardList, Settings, Activity } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
+import { usePathname } from 'next/navigation';
 
 export default function Sidebar() {
-  const [activeMenu, setActiveMenu] = useState('dashboard');
+  const pathname = usePathname();
 
   const menuItems = [
-    { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', href: '#' },
-    { id: 'monitoring', icon: Activity, label: 'Monitoring', href: '#' },
-    { id: 'reports', icon: BarChart3, label: 'Reports', href: '#' },
-    { id: 'logs', icon: ClipboardList, label: 'Logs', href: '#' },
-    { id: 'settings', icon: Settings, label: 'Settings', href: '#' },
+    { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
+    { id: 'monitoring', icon: Activity, label: 'Monitoring', href: '/dashboard/monitoring' },
+    { id: 'reports', icon: BarChart3, label: 'Reports', href: '/dashboard/reports' },
+    { id: 'logs', icon: ClipboardList, label: 'Logs', href: '/dashboard/logs' },
+    { id: 'settings', icon: Settings, label: 'Settings', href: '/dashboard/settings' },
   ];
+
+  const isActive = (href: string) => {
+    if (href === '/dashboard') {
+      return pathname === '/dashboard';
+    }
+    return pathname.startsWith(href);
+  };
 
   return (
     <aside className="w-64 bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 text-white shadow-2xl flex flex-col h-screen fixed left-0 top-0 border-r border-slate-700">
@@ -34,14 +41,13 @@ export default function Sidebar() {
       <nav className="flex-1 p-4 space-y-2">
         {menuItems.map((item) => {
           const Icon = item.icon;
-          const isActive = activeMenu === item.id;
+          const active = isActive(item.href);
           return (
             <Link
               key={item.id}
               href={item.href}
-              onClick={() => setActiveMenu(item.id)}
               className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                isActive
+                active
                   ? 'bg-blue-600 text-white shadow-lg'
                   : 'text-slate-300 hover:bg-slate-700 hover:text-white'
               }`}
