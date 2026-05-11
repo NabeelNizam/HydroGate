@@ -20,7 +20,7 @@ function useMousePosition() {
     return { mouseX, mouseY };
 }
 
-// Komponen Partikel Interaktif
+
 function FloatingParticles() {
     const [particles, setParticles] = useState<Array<{
         id: number;
@@ -32,7 +32,7 @@ function FloatingParticles() {
     }>>([]);
 
     useEffect(() => {
-        // Generate particles only on client side
+
         setParticles(
             Array.from({ length: 20 }, (_, i) => ({
                 id: i,
@@ -75,7 +75,7 @@ function FloatingParticles() {
     );
 }
 
-// Komponen Teks dengan Animasi Karakter
+
 function AnimatedText({ text, className, delay = 0 }: { text: string; className?: string; delay?: number }) {
     return (
         <span className={className}>
@@ -98,7 +98,7 @@ function AnimatedText({ text, className, delay = 0 }: { text: string; className?
     );
 }
 
-// Komponen Counter Animasi
+
 function AnimatedCounter({ target, suffix = "", duration = 2 }: { target: number; suffix?: string; duration?: number }) {
     const [count, setCount] = useState(0);
     const ref = useRef<HTMLSpanElement>(null);
@@ -132,7 +132,7 @@ function AnimatedCounter({ target, suffix = "", duration = 2 }: { target: number
     return <span ref={ref}>{count}{suffix}</span>;
 }
 
-// Komponen Tombol Magnetik
+
 function MagneticButton({ children, className, ...props }: React.ComponentProps<typeof motion.a>) {
     const ref = useRef<HTMLAnchorElement>(null);
     const x = useMotionValue(0);
@@ -168,7 +168,7 @@ function MagneticButton({ children, className, ...props }: React.ComponentProps<
     );
 }
 
-// Komponen Blob yang Mengikuti Mouse
+
 function MouseFollowBlob() {
     const { mouseX, mouseY } = useMousePosition();
     const springConfig = { stiffness: 50, damping: 20 };
