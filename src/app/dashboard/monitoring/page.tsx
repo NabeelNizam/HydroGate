@@ -7,18 +7,21 @@ import Navbar from '../components/Navbar';
 
 import {
   Activity,
-  TrendingUp,
+  Waves,
+  Ruler,
   CheckCircle,
+  RefreshCw,
 } from 'lucide-react';
 
 type DynamoItem = {
   device_id?: string;
   jarak_cm?: number | string;
-  led_status?: string;
+  hcsr_cm?: number | string;
+  water_level?: number | string;
+  water_status?: string;
+  status?: string;
+  gate_status?: string;
   servo_angle?: number | string;
-  buzzer?: boolean | string;
-  button_pressed?: boolean | string;
-  system_on?: boolean | string;
   source?: string;
   timestamp?: string | number;
   createdAt?: string | number;
@@ -27,9 +30,25 @@ type DynamoItem = {
 interface MonitoringData {
   gateId: string;
   waterLevel: number;
-  status: 'open' | 'closed';
-  flowRate: number;
+  ultrasonicCm: number;
+  waterStatus: string;
+  systemStatus: string;
+  gateStatus: 'open' | 'half' | 'closed';
+  gateLabel: string;
+  servoAngle: number;
   lastUpdate: string;
+}
+
+function formatLastUpdate(value?: string | number) {
+  if (!value) return '-';
+
+  const asNumber = Number(value);
+
+  if (!Number.isNaN(asNumber) && asNumber > 1000000000000) {
+    return new Date(asNumber).toLocaleTimeString('id-ID');
+  }
+
+  return String(value);
 }
 
 export default function Monitoring() {
@@ -50,78 +69,90 @@ export default function Monitoring() {
       } = await res.json();
 
       if (!res.ok) {
-        throw new Error(
-          json.detail || json.error || 'Gagal mengambil data'
-        );
+        throw new Error(json.detail || json.error || 'Gagal mengambil data');
       }
 
       setItems(json.items || []);
       setError('');
     } catch (err: unknown) {
       console.error('Fetch DynamoDB error:', err);
-
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError('Gagal mengambil data DynamoDB');
-      }
+      setItems([]);
+      setError(
+        err instanceof Error ? err.message : 'Gagal mengambil data DynamoDB'
+      );
     } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    void fetchDynamoData();
+    const timer = setTimeout(() => {
+      void fetchDynamoData();
+    }, 0);
 
     const interval = setInterval(() => {
       void fetchDynamoData();
     }, 5000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
   }, [fetchDynamoData]);
 
   const sortedItems = useMemo(() => {
     return [...items].sort((a, b) => {
-      const dateA = new Date(
-        String(a.timestamp || a.createdAt || 0)
-      ).getTime();
-
-      const dateB = new Date(
-        String(b.timestamp || b.createdAt || 0)
-      ).getTime();
+      const dateA = Number(a.timestamp || a.createdAt || 0);
+      const dateB = Number(b.timestamp || b.createdAt || 0);
 
       return dateB - dateA;
     });
   }, [items]);
 
-  const monitoringData: MonitoringData[] = sortedItems.map(
-    (item, index) => {
-      const jarakCm =
-        parseFloat(String(item.jarak_cm ?? 0)) || 0;
+  const physicalItems = useMemo(() => {
+    return sortedItems.filter((item) => item.device_id === 'ESP-001');
+  }, [sortedItems]);
+
+  const monitoringData: MonitoringData[] = useMemo(() => {
+    return physicalItems.map((item, index) => {
+      const ultrasonicCm =
+        parseFloat(String(item.hcsr_cm ?? item.jarak_cm ?? 0)) || 0;
+
+      const waterLevel =
+        parseFloat(String(item.water_level ?? 0)) || 0;
 
       const servoAngle =
         parseFloat(String(item.servo_angle ?? 0)) || 0;
 
+      const rawGateStatus = String(item.gate_status ?? item.status ?? 'AMAN');
+
+      const gateStatus =
+        rawGateStatus === 'BAHAYA'
+          ? 'open'
+          : rawGateStatus === 'SIAGA'
+            ? 'half'
+            : 'closed';
+
+      const gateLabel =
+        rawGateStatus === 'BAHAYA'
+          ? 'Terbuka'
+          : rawGateStatus === 'SIAGA'
+            ? 'Separuh Terbuka'
+            : 'Tertutup';
+
       return {
         gateId: item.device_id || `Gate-${index + 1}`,
-
-        // konversi cm ke meter
-        waterLevel: Number((jarakCm / 100).toFixed(2)),
-
-        status: servoAngle > 0 ? 'open' : 'closed',
-
-        // simulasi flow rate berdasarkan servo
-        flowRate: servoAngle * 10,
-
-        lastUpdate: item.timestamp || item.createdAt
-          ? new Date(
-            String(item.timestamp || item.createdAt)
-          ).toLocaleTimeString('id-ID')
-          : '-',
+        waterLevel,
+        ultrasonicCm,
+        waterStatus: String(item.water_status ?? '-'),
+        systemStatus: String(item.status ?? '-'),
+        gateStatus,
+        gateLabel,
+        servoAngle,
+        lastUpdate: formatLastUpdate(item.timestamp || item.createdAt),
       };
-    }
-  );
+    });
+  }, [physicalItems]);
 
   const latest = monitoringData[0];
 
@@ -133,14 +164,28 @@ export default function Monitoring() {
         <Navbar />
 
         <div className="p-8">
-          <div className="mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              Monitoring Real-time
-            </h1>
+          <div className="mb-8 flex items-start justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2">
+                Monitoring Real-time
+              </h1>
 
-            <p className="text-gray-600">
-              Status terkini semua pintu air dan sistem
-            </p>
+              <p className="text-gray-600">
+                Data fisik ESP-001 dari AWS IoT dan DynamoDB
+              </p>
+            </div>
+
+            <button
+              onClick={fetchDynamoData}
+              disabled={loading}
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white transition hover:bg-blue-700 disabled:bg-blue-300"
+            >
+              <RefreshCw
+                size={16}
+                className={loading ? 'animate-spin' : ''}
+              />
+              Refresh
+            </button>
           </div>
 
           {error && (
@@ -157,7 +202,7 @@ export default function Monitoring() {
 
           {!loading && monitoringData.length === 0 && (
             <div className="mb-6 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-700">
-              Data monitoring masih kosong.
+              Data monitoring ESP-001 masih kosong.
             </div>
           )}
 
@@ -166,19 +211,17 @@ export default function Monitoring() {
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-600 text-sm">
-                      Status Pintu
-                    </p>
+                    <p className="text-gray-600 text-sm">Status Gate</p>
 
                     <p
-                      className={`text-3xl font-bold mt-1 ${latest.status === 'open'
-                        ? 'text-emerald-600'
-                        : 'text-gray-600'
+                      className={`text-3xl font-bold mt-1 ${latest.gateStatus === 'open'
+                        ? 'text-red-600'
+                        : latest.gateStatus === 'half'
+                          ? 'text-yellow-600'
+                          : 'text-emerald-600'
                         }`}
                     >
-                      {latest.status === 'open'
-                        ? 'Terbuka'
-                        : 'Tertutup'}
+                      {latest.gateLabel}
                     </p>
                   </div>
 
@@ -189,44 +232,49 @@ export default function Monitoring() {
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-600 text-sm">
-                      Ketinggian Air
-                    </p>
+                    <p className="text-gray-600 text-sm">Water Level</p>
 
                     <p className="text-3xl font-bold text-gray-900 mt-1">
-                      {latest.waterLevel}m
+                      {latest.waterLevel}
+                    </p>
+
+                    <p className="text-sm text-gray-500 mt-1">
+                      {latest.waterStatus}
                     </p>
                   </div>
 
-                  <TrendingUp className="w-10 h-10 text-emerald-500" />
+                  <Waves className="w-10 h-10 text-blue-500" />
                 </div>
               </div>
 
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-600 text-sm">
-                      Flow Rate
-                    </p>
+                    <p className="text-gray-600 text-sm">Ultrasonik</p>
 
                     <p className="text-3xl font-bold text-gray-900 mt-1">
-                      {latest.flowRate} m³/s
+                      {latest.ultrasonicCm.toFixed(1)} cm
                     </p>
                   </div>
 
-                  <TrendingUp className="w-10 h-10 text-blue-500" />
+                  <Ruler className="w-10 h-10 text-indigo-500" />
                 </div>
               </div>
 
               <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-gray-600 text-sm">
-                      Status Sistem
-                    </p>
+                    <p className="text-gray-600 text-sm">Status Sistem</p>
 
-                    <p className="text-3xl font-bold text-emerald-600 mt-1">
-                      Normal
+                    <p
+                      className={`text-3xl font-bold mt-1 ${latest.systemStatus === 'BAHAYA'
+                        ? 'text-red-600'
+                        : latest.systemStatus === 'SIAGA'
+                          ? 'text-yellow-600'
+                          : 'text-emerald-600'
+                        }`}
+                    >
+                      {latest.systemStatus}
                     </p>
                   </div>
 
@@ -248,19 +296,27 @@ export default function Monitoring() {
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
-                      Nama Pintu
+                      Device
                     </th>
 
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
-                      Ketinggian Air
+                      Water Level
                     </th>
 
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
-                      Status Operasi
+                      Ultrasonik
                     </th>
 
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
-                      Flow Rate
+                      Status Air
+                    </th>
+
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
+                      Status Gate
+                    </th>
+
+                    <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
+                      Servo
                     </th>
 
                     <th className="px-6 py-3 text-left text-sm font-semibold text-gray-700">
@@ -270,9 +326,9 @@ export default function Monitoring() {
                 </thead>
 
                 <tbody className="divide-y divide-gray-200">
-                  {monitoringData.map((gate) => (
+                  {monitoringData.map((gate, index) => (
                     <tr
-                      key={gate.gateId}
+                      key={`${gate.gateId}-${gate.lastUpdate}-${index}`}
                       className="hover:bg-gray-50"
                     >
                       <td className="px-6 py-4">
@@ -283,33 +339,54 @@ export default function Monitoring() {
 
                       <td className="px-6 py-4">
                         <span className="text-gray-700">
-                          {gate.waterLevel.toFixed(2)}m
-                        </span>
-                      </td>
-
-                      <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${gate.status === 'open'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-gray-100 text-gray-700'
-                            }`}
-                        >
-                          <span
-                            className={`w-2 h-2 rounded-full ${gate.status === 'open'
-                              ? 'bg-emerald-500'
-                              : 'bg-gray-400'
-                              }`}
-                          />
-
-                          {gate.status === 'open'
-                            ? 'Terbuka'
-                            : 'Tertutup'}
+                          {gate.waterLevel}
                         </span>
                       </td>
 
                       <td className="px-6 py-4">
                         <span className="text-gray-700">
-                          {gate.flowRate} m³/s
+                          {gate.ultrasonicCm.toFixed(1)} cm
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${gate.waterStatus === 'MERAH'
+                            ? 'bg-red-100 text-red-700'
+                            : gate.waterStatus === 'KUNING'
+                              ? 'bg-yellow-100 text-yellow-700'
+                              : 'bg-emerald-100 text-emerald-700'
+                            }`}
+                        >
+                          {gate.waterStatus}
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <span
+                          className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${gate.gateStatus === 'open'
+                            ? 'bg-red-100 text-red-700'
+                            : gate.gateStatus === 'half'
+                              ? 'bg-yellow-100 text-yellow-700'
+                              : 'bg-emerald-100 text-emerald-700'
+                            }`}
+                        >
+                          <span
+                            className={`w-2 h-2 rounded-full ${gate.gateStatus === 'open'
+                              ? 'bg-red-500'
+                              : gate.gateStatus === 'half'
+                                ? 'bg-yellow-500'
+                                : 'bg-emerald-500'
+                              }`}
+                          />
+
+                          {gate.gateLabel}
+                        </span>
+                      </td>
+
+                      <td className="px-6 py-4">
+                        <span className="text-gray-700">
+                          {gate.servoAngle}°
                         </span>
                       </td>
 
@@ -322,6 +399,12 @@ export default function Monitoring() {
                   ))}
                 </tbody>
               </table>
+
+              {!loading && monitoringData.length === 0 && (
+                <div className="p-6 text-sm text-gray-500">
+                  Belum ada data untuk ditampilkan.
+                </div>
+              )}
             </div>
           </div>
         </div>
