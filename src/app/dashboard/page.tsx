@@ -1,427 +1,512 @@
-"use client";
+'use client';
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAuthContext } from "@/components/AuthProvider";
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import Sidebar from './components/Sidebar';
+import Navbar from './components/Navbar';
 
-import Sidebar from "./components/Sidebar";
-import Navbar from "./components/Navbar";
-import StatusCard from "./components/StatusCard";
-import WaterLevelChart from "./components/WaterLevelChart";
-import GateControlPanel from "./components/GateControlPanel";
-import ActivityLog from "./components/ActivityLog";
-import { Lock, RefreshCw } from "lucide-react";
+import {
+  Activity,
+  Gauge,
+  RefreshCw,
+  Radio,
+  ShieldCheck,
+  Waves,
+} from 'lucide-react';
 
 type DynamoItem = {
   device_id?: string;
   jarak_cm?: number | string;
-  led_status?: string;
+  hcsr_cm?: number | string;
+  water_level?: number | string;
+  water_status?: string;
+  status?: string;
+  gate_status?: string;
   servo_angle?: number | string;
-  buzzer?: boolean | string;
-  button_pressed?: boolean | string;
-  system_on?: boolean | string;
   source?: string;
   timestamp?: string | number;
   createdAt?: string | number;
 };
 
-export default function Dashboard() {
-  const router = useRouter();
-  const { user, loading } = useAuthContext();
+function formatTime(value?: string | number) {
+  if (!value) return '-';
 
+  const numberValue = Number(value);
+
+  if (!Number.isNaN(numberValue) && numberValue > 1000000000000) {
+    return new Date(numberValue).toLocaleString('id-ID');
+  }
+
+  return String(value);
+}
+
+function getGateLabel(status?: string) {
+  if (status === 'BAHAYA') return 'Terbuka';
+  if (status === 'SIAGA') return 'Separuh Terbuka';
+  return 'Tertutup';
+}
+
+function getStatusStyle(status?: string) {
+  if (status === 'BAHAYA') {
+    return {
+      text: 'text-red-700',
+      bg: 'bg-red-50',
+      border: 'border-red-200',
+      badge: 'bg-red-100 text-red-700',
+    };
+  }
+
+  if (status === 'SIAGA') {
+    return {
+      text: 'text-yellow-700',
+      bg: 'bg-yellow-50',
+      border: 'border-yellow-200',
+      badge: 'bg-yellow-100 text-yellow-700',
+    };
+  }
+
+  return {
+    text: 'text-emerald-700',
+    bg: 'bg-emerald-50',
+    border: 'border-emerald-200',
+    badge: 'bg-emerald-100 text-emerald-700',
+  };
+}
+
+export default function Dashboard() {
   const [items, setItems] = useState<DynamoItem[]>([]);
-  const [fetching, setFetching] = useState(true);
-  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
   const fetchDynamoData = useCallback(async () => {
     try {
-      setFetching(true);
-      setError("");
-
-      const res = await fetch("/api/dynamodb", {
-        cache: "no-store",
+      const res = await fetch('/api/dynamodb', {
+        cache: 'no-store',
       });
 
-      const json: { items?: DynamoItem[]; detail?: string; error?: string } =
-        await res.json();
+      const json: {
+        items?: DynamoItem[];
+        error?: string;
+        detail?: string;
+      } = await res.json();
 
       if (!res.ok) {
-        throw new Error(
-          json.detail || json.error || "Gagal mengambil data"
-        );
+        throw new Error(json.detail || json.error || 'Gagal mengambil data');
       }
 
       setItems(json.items || []);
+      setError('');
     } catch (err: unknown) {
-      console.error("Fetch DynamoDB error:", err);
+      console.error('Fetch DynamoDB error:', err);
 
-      if (err instanceof Error) {
-        setError(err.message);
-      } else {
-        setError("Gagal mengambil data DynamoDB");
-      }
+      setItems([]);
+
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Gagal mengambil data DynamoDB'
+      );
     } finally {
-      setFetching(false);
+      setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    if (!loading && !user) {
-      router.push("/auth/login");
+  const sendGateCommand = async (
+    command: 'OPEN' | 'HALF' | 'CLOSE'
+  ) => {
+    try {
+      setSending(true);
+
+      const res = await fetch('/api/gate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ command }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || 'Gagal mengirim command');
+      }
+
+      await fetchDynamoData();
+    } catch (err) {
+      console.error(err);
+
+      alert('Gagal mengontrol gate');
+    } finally {
+      setSending(false);
     }
-  }, [loading, user, router]);
+  };
 
   useEffect(() => {
-    if (!user) return;
-
     const timer = setTimeout(() => {
       void fetchDynamoData();
     }, 0);
 
-    return () => clearTimeout(timer);
-  }, [user]);
+    const interval = setInterval(() => {
+      void fetchDynamoData();
+    }, 3000);
+
+    return () => {
+      clearTimeout(timer);
+      clearInterval(interval);
+    };
+  }, [fetchDynamoData]);
 
   const sortedItems = useMemo(() => {
     return [...items].sort((a, b) => {
       const dateA = Number(a.timestamp || a.createdAt || 0);
       const dateB = Number(b.timestamp || b.createdAt || 0);
+
       return dateB - dateA;
     });
   }, [items]);
 
-  const latest = sortedItems[0] || {};
-
-  const jarakCm = Number(latest.jarak_cm ?? 0);
-  const servoAngle = Number(latest.servo_angle ?? 0);
-
-  const isSystemOn =
-    latest.system_on === true || latest.system_on === "true";
-
-  const isBuzzerOn =
-    latest.buzzer === true || latest.buzzer === "true";
-
-  const isButtonPressed =
-    latest.button_pressed === true || latest.button_pressed === "true";
-
-  const isHighWater = jarakCm <= 10;
-  const isWarningWater = jarakCm > 10 && jarakCm <= 20;
-
-  const lastUpdate =
-    latest.timestamp || latest.createdAt || "Belum ada data";
-
-  const activeAlerts = [
-    ...(isHighWater
-      ? [
-        {
-          title: "Critical: Water Level High",
-          desc: `Jarak air ${jarakCm} cm, level air sangat tinggi`,
-        },
-      ]
-      : []),
-    ...(isWarningWater
-      ? [
-        {
-          title: "Warning: Water Level Rising",
-          desc: `Jarak air ${jarakCm} cm, level air mulai naik`,
-        },
-      ]
-      : []),
-    ...(isBuzzerOn
-      ? [
-        {
-          title: "Buzzer Active",
-          desc: "Buzzer sedang menyala",
-        },
-      ]
-      : []),
-  ];
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="text-center">
-          <div className="mb-3 text-lg font-semibold text-slate-700">
-            Memuat dashboard...
-          </div>
-          <p className="text-sm text-slate-500">
-            Mengecek autentikasi pengguna
-          </p>
-        </div>
-      </div>
+  const physicalItems = useMemo(() => {
+    return sortedItems.filter(
+      (item) => item.device_id === 'ESP-001'
     );
-  }
+  }, [sortedItems]);
 
-  if (!user) return null;
+  const latest = physicalItems[0];
+
+  const ultrasonicCm = Number(
+    latest?.hcsr_cm ?? latest?.jarak_cm ?? 0
+  );
+
+  const waterLevel = Number(
+    latest?.water_level ?? 0
+  );
+
+  const waterStatus = String(
+    latest?.water_status ?? '-'
+  );
+
+  const systemStatus = String(
+    latest?.status ?? '-'
+  );
+
+  const gateRawStatus = String(
+    latest?.gate_status ??
+    latest?.status ??
+    'AMAN'
+  );
+
+  const gateLabel = getGateLabel(gateRawStatus);
+
+  const servoAngle = Number(
+    latest?.servo_angle ?? 0
+  );
+
+  const lastUpdate = formatTime(
+    latest?.timestamp || latest?.createdAt
+  );
+
+  const style = getStatusStyle(systemStatus);
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen bg-slate-100">
       <Sidebar />
 
-      <main className="flex-1 ml-64">
+      <main className="ml-64 flex-1">
         <Navbar />
 
         <div className="p-8">
-          <div className="mb-6 flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-slate-900">
-                Dashboard Overview
-              </h1>
-              <p className="text-sm text-slate-600 mt-1">
-                Selamat datang, {user.displayName || user.email}
-              </p>
-            </div>
 
-            <button
-              onClick={fetchDynamoData}
-              disabled={fetching}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-lg font-semibold transition"
-            >
-              <RefreshCw size={16} className={fetching ? "animate-spin" : ""} />
-              Refresh
-            </button>
-          </div>
+          {/* HERO */}
+
+          <section className="mb-8 overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-white via-slate-50 to-cyan-50 p-8 shadow-xl">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+
+              <div>
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-cyan-100 px-4 py-2 text-sm font-semibold text-cyan-700">
+                  <Radio size={16} />
+                  ESP-001 Live Monitoring
+                </div>
+
+                <h1 className="text-4xl font-black tracking-tight text-slate-900">
+                  HydroGate Dashboard
+                </h1>
+
+                <p className="mt-3 max-w-2xl text-slate-600">
+                  Monitoring ketinggian air, sensor ultrasonik,
+                  dan kontrol pintu air secara realtime melalui AWS IoT Core.
+                </p>
+              </div>
+
+              <button
+                onClick={fetchDynamoData}
+                disabled={loading}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-600 px-5 py-3 font-bold text-white transition hover:bg-cyan-700 disabled:opacity-60"
+              >
+                <RefreshCw
+                  size={18}
+                  className={loading ? 'animate-spin' : ''}
+                />
+
+                Refresh Data
+              </button>
+            </div>
+          </section>
+
+          {/* ERROR */}
 
           {error && (
-            <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
               <b>Error:</b> {error}
             </div>
           )}
 
-          {fetching && (
-            <div className="mb-6 rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-700">
-              Mengambil data terbaru dari DynamoDB...
+          {/* EMPTY */}
+
+          {!loading && !latest && (
+            <div className="mb-6 rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-700">
+              Belum ada data dari ESP-001.
             </div>
           )}
 
-          {!fetching && items.length === 0 && (
-            <div className="mb-6 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-700">
-              Data DynamoDB masih kosong.
-            </div>
-          )}
+          {/* CARDS */}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <StatusCard
-              title="Jarak Air"
-              value={jarakCm}
-              unit="cm"
-              icon="💧"
-              status={
-                isHighWater ? "critical" : isWarningWater ? "warning" : "normal"
-              }
-              trend={isHighWater ? "up" : "down"}
-              trendValue={`${jarakCm} cm`}
-            />
+          <section className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
 
-            <StatusCard
-              title="Servo Gate"
-              value={servoAngle}
-              unit="degree"
-              icon="🚪"
-              status="normal"
-              trend="down"
-              trendValue={`${servoAngle}°`}
-            />
+            {/* WATER */}
 
-            <StatusCard
-              title="LED Status"
-              value={latest.led_status || "Unknown"}
-              unit=""
-              icon="💡"
-              status={isSystemOn ? "normal" : "warning"}
-              trend={isSystemOn ? "up" : "down"}
-              trendValue={isSystemOn ? "System ON" : "System OFF"}
-            />
+            <div className="rounded-3xl border border-cyan-100 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex items-center justify-between">
+                <p className="font-semibold text-slate-600">
+                  Water Level
+                </p>
 
-            <StatusCard
-              title="Buzzer"
-              value={isBuzzerOn ? "ON" : "OFF"}
-              unit=""
-              icon="🔊"
-              status={isBuzzerOn ? "warning" : "normal"}
-              trend={isBuzzerOn ? "up" : "down"}
-              trendValue={isButtonPressed ? "Button pressed" : "Normal"}
-            />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-            <div className="lg:col-span-2">
-              <WaterLevelChart />
-            </div>
-
-            <div className="space-y-4">
-              <div className="bg-white rounded-xl border-2 border-slate-200 p-6 shadow-sm">
-                <h3 className="text-lg font-bold text-slate-900 mb-4">
-                  Latest DynamoDB Data
-                </h3>
-
-                <div className="space-y-3 text-sm">
-                  <div className="flex justify-between border-b pb-3">
-                    <span className="font-medium text-slate-700">Device ID</span>
-                    <span className="font-bold text-blue-600">
-                      {latest.device_id || "-"}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between border-b pb-3">
-                    <span className="font-medium text-slate-700">Jarak Air</span>
-                    <span className="font-bold text-blue-600">
-                      {jarakCm} cm
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between border-b pb-3">
-                    <span className="font-medium text-slate-700">LED Status</span>
-                    <span className="font-bold text-green-600">
-                      {latest.led_status || "-"}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between border-b pb-3">
-                    <span className="font-medium text-slate-700">Servo Angle</span>
-                    <span className="font-bold text-green-600">
-                      {servoAngle}°
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between border-b pb-3">
-                    <span className="font-medium text-slate-700">Buzzer</span>
-                    <span className="font-bold text-red-600">
-                      {isBuzzerOn ? "ON" : "OFF"}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between border-b pb-3">
-                    <span className="font-medium text-slate-700">Button</span>
-                    <span className="font-bold text-orange-600">
-                      {isButtonPressed ? "Pressed" : "Not pressed"}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between border-b pb-3">
-                    <span className="font-medium text-slate-700">System</span>
-                    <span className="font-bold text-slate-700">
-                      {isSystemOn ? "ON" : "OFF"}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between border-b pb-3">
-                    <span className="font-medium text-slate-700">Source</span>
-                    <span className="font-bold text-slate-600">
-                      {latest.source || "-"}
-                    </span>
-                  </div>
-
-                  <div className="flex justify-between">
-                    <span className="font-medium text-slate-700">
-                      Last Update
-                    </span>
-                    <span className="font-bold text-slate-600 text-right">
-                      {String(lastUpdate)}
-                    </span>
-                  </div>
+                <div className="rounded-2xl bg-cyan-100 p-3 text-cyan-700">
+                  <Waves size={24} />
                 </div>
               </div>
 
-              <div
-                className={`rounded-xl border-2 p-6 shadow-sm ${activeAlerts.length > 0
-                  ? "bg-gradient-to-br from-red-50 to-orange-50 border-red-200"
-                  : "bg-gradient-to-br from-green-50 to-emerald-50 border-green-200"
-                  }`}
-              >
-                <h3 className="text-lg font-bold text-slate-900 mb-4">
-                  ⚠️ Active Alerts
-                </h3>
+              <p className="text-5xl font-black text-slate-900">
+                {waterLevel}
+              </p>
 
-                {activeAlerts.length > 0 ? (
-                  <div className="space-y-3">
-                    {activeAlerts.map((alert, index) => (
-                      <div key={index} className="text-sm">
-                        <p className="font-semibold text-red-700">
-                          {alert.title}
-                        </p>
-                        <p className="text-xs text-red-600 mt-1">
-                          {alert.desc}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm font-medium text-green-700">
-                    Tidak ada alert aktif. Sistem dalam kondisi aman.
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="mb-8">
-            <GateControlPanel />
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2">
-              <ActivityLog />
+              <p className="mt-3 text-sm font-semibold text-cyan-700">
+                Status: {waterStatus}
+              </p>
             </div>
 
-            <div className="space-y-4">
-              <div className="bg-white rounded-xl border-2 border-slate-200 p-6 shadow-sm">
-                <h3 className="text-lg font-bold text-slate-900 mb-4">
-                  Quick Actions
-                </h3>
+            {/* ULTRASONIC */}
 
-                <div className="space-y-3">
-                  <button className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition flex items-center justify-center gap-2">
-                    <Lock size={18} />
-                    Emergency Close All
-                  </button>
+            <div className="rounded-3xl border border-blue-100 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex items-center justify-between">
+                <p className="font-semibold text-slate-600">
+                  Ultrasonik
+                </p>
 
-                  <button className="w-full py-2 px-4 bg-slate-200 hover:bg-slate-300 text-slate-900 font-semibold rounded-lg transition">
-                    📊 Generate Report
-                  </button>
-
-                  <button className="w-full py-2 px-4 bg-slate-200 hover:bg-slate-300 text-slate-900 font-semibold rounded-lg transition">
-                    🔧 System Settings
-                  </button>
-
-                  <button className="w-full py-2 px-4 bg-slate-200 hover:bg-slate-300 text-slate-900 font-semibold rounded-lg transition">
-                    📞 Contact Support
-                  </button>
+                <div className="rounded-2xl bg-blue-100 p-3 text-blue-700">
+                  <Gauge size={24} />
                 </div>
               </div>
 
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 p-6 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-900 mb-3">
-                  ℹ️ Key Information
-                </h3>
+              <p className="text-5xl font-black text-slate-900">
+                {ultrasonicCm.toFixed(1)}
 
-                <div className="text-xs text-slate-700 space-y-2">
-                  <p>
-                    <span className="font-semibold">Sensor:</span> Ultrasonic
-                  </p>
-                  <p>
-                    <span className="font-semibold">Gate:</span> Servo Motor
-                  </p>
-                  <p>
-                    <span className="font-semibold">Last Update:</span>{" "}
-                    {String(lastUpdate)}
-                  </p>
-                  <p>
-                    <span className="font-semibold">Data Source:</span>{" "}
-                    DynamoDB
-                  </p>
+                <span className="ml-2 text-xl text-slate-500">
+                  cm
+                </span>
+              </p>
+
+              <p className="mt-3 text-sm font-semibold text-blue-700">
+                HC-SR04 Reading
+              </p>
+            </div>
+
+            {/* STATUS */}
+
+            <div
+              className={`rounded-3xl border p-6 shadow-sm ${style.bg} ${style.border}`}
+            >
+              <div className="mb-5 flex items-center justify-between">
+                <p className="font-semibold text-slate-700">
+                  Status Sistem
+                </p>
+
+                <div className="rounded-2xl bg-white p-3">
+                  <ShieldCheck
+                    size={24}
+                    className={style.text}
+                  />
                 </div>
               </div>
-            </div>
-          </div>
 
-          <footer className="mt-12 pt-8 border-t border-slate-200 text-center text-sm text-slate-500">
-            <p>
-              HydroGate © 2024 | Dam Gate Monitoring System | Status:{" "}
-              <span className="text-green-600 font-semibold">● Online</span>
-            </p>
+              <p className={`text-5xl font-black ${style.text}`}>
+                {systemStatus}
+              </p>
+
+              <p className="mt-3 text-sm font-semibold text-slate-600">
+                Kondisi air saat ini
+              </p>
+            </div>
+
+            {/* GATE */}
+
+            <div className="rounded-3xl border border-emerald-100 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex items-center justify-between">
+                <p className="font-semibold text-slate-600">
+                  Status Gate
+                </p>
+
+                <div className="rounded-2xl bg-emerald-100 p-3 text-emerald-700">
+                  <Activity size={24} />
+                </div>
+              </div>
+
+              <p className="text-4xl font-black text-slate-900">
+                {gateLabel}
+              </p>
+
+              <p className="mt-3 text-sm font-semibold text-emerald-700">
+                Servo: {servoAngle}°
+              </p>
+            </div>
+          </section>
+
+          {/* CONTENT */}
+
+          <section className="grid grid-cols-1 gap-8 xl:grid-cols-3">
+
+            {/* INFO */}
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm xl:col-span-2">
+
+              <div className="mb-6 flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900">
+                    Data Terbaru
+                  </h2>
+
+                  <p className="text-sm text-slate-500">
+                    Update terakhir: {lastUpdate}
+                  </p>
+                </div>
+
+                <span
+                  className={`rounded-full px-4 py-2 text-sm font-bold ${style.badge}`}
+                >
+                  {systemStatus}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+
+                <InfoRow
+                  label="Device ID"
+                  value={latest?.device_id || '-'}
+                />
+
+                <InfoRow
+                  label="Source"
+                  value={latest?.source || 'physical'}
+                />
+
+                <InfoRow
+                  label="Water Status"
+                  value={waterStatus}
+                />
+
+                <InfoRow
+                  label="Gate Status"
+                  value={gateLabel}
+                />
+
+                <InfoRow
+                  label="Water Level"
+                  value={String(waterLevel)}
+                />
+
+                <InfoRow
+                  label="Ultrasonik"
+                  value={`${ultrasonicCm.toFixed(1)} cm`}
+                />
+              </div>
+            </div>
+
+            {/* CONTROL */}
+
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+
+              <div className="mb-6">
+                <h2 className="text-2xl font-black text-slate-900">
+                  Kontrol Manual
+                </h2>
+
+                <p className="mt-1 text-sm text-slate-500">
+                  Kirim command langsung ke ESP32 via AWS IoT.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+
+                <button
+                  disabled={sending}
+                  onClick={() => sendGateCommand('OPEN')}
+                  className="w-full rounded-2xl bg-red-600 px-5 py-4 font-black text-white shadow-sm transition hover:bg-red-700 disabled:opacity-60"
+                >
+                  Buka Penuh
+                </button>
+
+                <button
+                  disabled={sending}
+                  onClick={() => sendGateCommand('HALF')}
+                  className="w-full rounded-2xl bg-yellow-500 px-5 py-4 font-black text-white shadow-sm transition hover:bg-yellow-600 disabled:opacity-60"
+                >
+                  Buka Separuh
+                </button>
+
+                <button
+                  disabled={sending}
+                  onClick={() => sendGateCommand('CLOSE')}
+                  className="w-full rounded-2xl bg-emerald-600 px-5 py-4 font-black text-white shadow-sm transition hover:bg-emerald-700 disabled:opacity-60"
+                >
+                  Tutup Gate
+                </button>
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+                Status tombol:{' '}
+                {sending
+                  ? 'Mengirim command...'
+                  : 'Siap'}
+              </div>
+            </div>
+          </section>
+
+          {/* FOOTER */}
+
+          <footer className="mt-10 text-center text-sm text-slate-500">
+            HydroGate © 2024 | AWS IoT Core Connected System
           </footer>
         </div>
       </main>
+    </div>
+  );
+}
+
+function InfoRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+      <p className="text-sm font-semibold text-slate-500">
+        {label}
+      </p>
+
+      <p className="mt-1 text-lg font-black text-slate-900">
+        {value}
+      </p>
     </div>
   );
 }
