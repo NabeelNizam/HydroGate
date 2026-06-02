@@ -1,6 +1,6 @@
 'use client';
 
-import { LayoutDashboard, BarChart3, ClipboardList, Settings, Activity } from 'lucide-react';
+import { LayoutDashboard, BarChart3, ClipboardList, Settings, Activity, Network } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -10,6 +10,7 @@ export default function Sidebar() {
   const menuItems = [
     { id: 'dashboard', icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
     { id: 'monitoring', icon: Activity, label: 'Monitoring', href: '/dashboard/monitoring' },
+    { id: 'multi-device', icon: Network, label: 'Multi Device', href: '/dashboard/multi-device' },
     { id: 'reports', icon: BarChart3, label: 'Reports', href: '/dashboard/reports' },
     { id: 'logs', icon: ClipboardList, label: 'Logs', href: '/dashboard/logs' },
     { id: 'settings', icon: Settings, label: 'Settings', href: '/dashboard/settings' },

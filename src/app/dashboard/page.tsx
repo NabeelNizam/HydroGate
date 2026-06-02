@@ -22,6 +22,10 @@ type DynamoItem = {
   status?: string;
   gate_status?: string;
   servo_angle?: number | string;
+
+  ddatetime?: string;
+  unix_time?: number | string;
+
   source?: string;
   timestamp?: string | number;
   createdAt?: string | number;
@@ -156,12 +160,28 @@ export default function Dashboard() {
     };
   }, [fetchDynamoData]);
 
+  const getItemTime = (item: DynamoItem) => {
+    if (item.unix_time) {
+      return Number(item.unix_time) * 1000;
+    }
+
+    if (item.ddatetime) {
+      return new Date(item.ddatetime.replace(' ', 'T')).getTime();
+    }
+
+    if (item.createdAt) {
+      return Number(item.createdAt);
+    }
+
+    return Number(item.timestamp || 0);
+  };
+
   const sortedItems = useMemo(() => {
     return [...items].sort((a, b) => {
-      const dateA = Number(a.timestamp || a.createdAt || 0);
-      const dateB = Number(b.timestamp || b.createdAt || 0);
-
-      return dateB - dateA;
+      return (
+        Number(b.unix_time ?? 0) -
+        Number(a.unix_time ?? 0)
+      );
     });
   }, [items]);
 
@@ -201,10 +221,9 @@ export default function Dashboard() {
     latest?.servo_angle ?? 0
   );
 
-  const lastUpdate = formatTime(
-    latest?.timestamp || latest?.createdAt
-  );
-
+  const lastUpdate =
+    latest?.ddatetime ??
+    '-';
   const style = getStatusStyle(systemStatus);
 
   return (
@@ -421,6 +440,11 @@ export default function Dashboard() {
                 <InfoRow
                   label="Water Level"
                   value={String(waterLevel)}
+                />
+
+                <InfoRow
+                  label="Waktu Sensor"
+                  value={latest?.ddatetime || '-'}
                 />
 
                 <InfoRow

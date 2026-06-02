@@ -31,7 +31,7 @@ export default function Hero() {
                         <span className="pulse-ring absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
                     </span>
-                    Sistem Aktif — Real-time
+                    Sistem Aktif — Real-Time
                 </div>
 
                 <h1 className="fade-up fade-up-delay-2 font-semibold tracking-tight text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.1] mb-6">
