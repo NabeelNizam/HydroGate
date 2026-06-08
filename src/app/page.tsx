@@ -1,20 +1,25 @@
 import "./globals.css"
 import Hero from "./sections/Hero"
 import About from "./sections/About"
-import HowItWorks from "./sections/HowItWorks"
 import Features from "./sections/Features"
 import LiveStatus from "./sections/LiveStatus"
+import SystemStats from "./sections/SystemStats"
+import HowItWorks from "./sections/HowItWorks"
+import { LandingMonitoringProvider } from "./sections/landing-monitoring"
 
 
 export default function Home() {
 
   return (
-    <main className="cursor-default">
+    <main className="cursor-default bg-white">
+      <LandingMonitoringProvider>
         <Hero />
         <About />
-        <HowItWorks />
         <Features />
+        <SystemStats />
         <LiveStatus />
+        <HowItWorks />
+      </LandingMonitoringProvider>
     </main>
   )
 

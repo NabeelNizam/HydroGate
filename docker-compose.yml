@@ -1,0 +1,13 @@
+services:
+  hydrogate:
+    build: .
+
+    container_name: hydrogate
+
+    ports:
+      - "3000:3000"
+
+    env_file:
+      - .env.local
+
+    restart: unless-stopped

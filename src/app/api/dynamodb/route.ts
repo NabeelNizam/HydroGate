@@ -4,6 +4,7 @@ import {
   DynamoDBDocumentClient,
   ScanCommand,
 } from "@aws-sdk/lib-dynamodb";
+import { DynamoDeviceItem, getItemTimestampMs } from "@/lib/device-monitoring";
 
 const client = new DynamoDBClient({
   region: process.env.AWS_REGION,
@@ -11,35 +12,33 @@ const client = new DynamoDBClient({
 
 const docClient = DynamoDBDocumentClient.from(client);
 
-function getTimeValue(item: Record<string, unknown>) {
-  const raw = item.timestamp ?? item.createdAt ?? 0;
-  const num = Number(raw);
-
-  if (!Number.isNaN(num)) {
-    return num;
-  }
-
-  const date = new Date(String(raw)).getTime();
-  return Number.isNaN(date) ? 0 : date;
-}
-
 export async function GET() {
   try {
+    const tableName = process.env.DYNAMODB_TABLE_NAME;
+
+    if (!tableName) {
+      return NextResponse.json(
+        { error: "DYNAMODB_TABLE_NAME belum diisi" },
+        { status: 500 }
+      );
+    }
+
     const result = await docClient.send(
       new ScanCommand({
-        TableName: process.env.DYNAMODB_TABLE_NAME,
+        TableName: tableName,
       })
     );
 
-    const items = result.Items ?? [];
+    const items = (result.Items ?? []) as DynamoDeviceItem[];
 
     const sortedItems = items.sort((a, b) => {
-      return getTimeValue(b) - getTimeValue(a);
+      return getItemTimestampMs(b) - getItemTimestampMs(a);
     });
 
     return NextResponse.json({
       items: sortedItems,
       latest: sortedItems[0] ?? null,
+      totalItems: sortedItems.length,
     });
   } catch (error) {
     console.error("DynamoDB error:", error);

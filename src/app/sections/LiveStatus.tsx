@@ -1,185 +1,295 @@
 "use client";
 
-function WaterLevelBar({ level, max }: { level: number; max: number }) {
-  const pct = Math.min((level / max) * 100, 100);
-  const color = pct < 50 ? "#22d3ee" : pct < 80 ? "#f59e0b" : "#ef4444";
+import {
+  Activity,
+  CheckCircle,
+  Clock,
+  Gauge,
+  RefreshCw,
+  Ruler,
+  Waves,
+} from "lucide-react";
+import { useMemo } from "react";
+import { useLandingMonitoring } from "./landing-monitoring";
 
-  return (
-    <div className="relative">
-      <div className="flex justify-between items-end mb-2">
-        <span className="text-slate-400 text-xs">Ketinggian Air</span>
-        <span className="text-xs font-mono" style={{ color }}>
-          {level.toFixed(1)}m / {max}m
-        </span>
-      </div>
+function statusTextClass(status?: string) {
+  const normalized = String(status || "").toUpperCase();
 
-      <div className="h-3 bg-white/5 rounded-full overflow-hidden">
-        <div
-          className="h-full rounded-full transition-all duration-1000 relative overflow-hidden"
-          style={{ width: `${pct}%`, backgroundColor: color }}
-        >
-          <div className="absolute inset-0 bg-white/20 animate-pulse" />
-        </div>
-      </div>
-
-      <div className="flex justify-between mt-1">
-        <span className="text-slate-600 text-[10px]">0m</span>
-        <span className="text-slate-600 text-[10px]">
-          Batas Aman: {max * 0.8}m
-        </span>
-        <span className="text-slate-600 text-[10px]">{max}m</span>
-      </div>
-    </div>
-  );
+  if (normalized === "BAHAYA" || normalized === "MERAH") return "text-rose-600";
+  if (normalized === "SIAGA" || normalized === "KUNING") return "text-amber-600";
+  return "text-teal-700";
 }
 
-function GateStatusBadge({ open }: { open: boolean }) {
-  return (
-    <div
-      className={`flex items-center gap-2.5 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-500 ${
-        open
-          ? "bg-emerald-500/10 border border-emerald-500/30 text-emerald-400"
-          : "bg-rose-500/10 border border-rose-500/30 text-rose-400"
-      }`}
-    >
-      <span className="relative flex h-2.5 w-2.5">
-        <span
-          className={`pulse-ring absolute inline-flex h-full w-full rounded-full opacity-75 ${
-            open ? "bg-emerald-400" : "bg-rose-400"
-          }`}
-        />
-        <span
-          className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
-            open ? "bg-emerald-400" : "bg-rose-400"
-          }`}
-        />
-      </span>
-      Pintu {open ? "Terbuka" : "Tertutup"}
-    </div>
-  );
+function statusBadgeClass(status?: string) {
+  const normalized = String(status || "").toUpperCase();
+
+  if (normalized === "BAHAYA" || normalized === "MERAH") {
+    return "border-rose-200 bg-rose-50 text-rose-700";
+  }
+
+  if (normalized === "SIAGA" || normalized === "KUNING") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  return "border-teal-200 bg-teal-50 text-teal-700";
 }
 
-const gates = [
-  {
-    id: "A1",
-    label: "Pintu A1",
-    open: true,
-    level: 2.3,
-    max: 5.0,
-    location: "Hulu Kiri",
-  },
-];
+function displayValue(
+  loading: boolean,
+  value: number | string | null | undefined,
+  suffix = ""
+) {
+  if (loading) return "Memuat data...";
+  if (value === null || value === undefined || value === "" || value === "-") {
+    return "Data belum tersedia";
+  }
+
+  return `${value}${suffix}`;
+}
+
+function clampPercent(value: number) {
+  return Math.min(Math.max(value, 0), 100);
+}
+
+function getWaterLevelPercent(waterLevel?: number) {
+  if (Number.isFinite(waterLevel)) {
+    return clampPercent(Number(waterLevel));
+  }
+
+  return null;
+}
+
+function formatPercent(value: number | null) {
+  if (value === null) {
+    return null;
+  }
+
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function formatGateStatus(status?: string) {
+  if (!status || status === "-") return null;
+
+  const normalized = status.trim().toUpperCase();
+
+  if (normalized === "OPEN" || normalized === "TERBUKA") return "Terbuka";
+  if (normalized === "CLOSE" || normalized === "CLOSED" || normalized === "TERTUTUP") return "Tertutup";
+  if (normalized === "HALF" || normalized === "SEPARUH TERBUKA") return "Separuh terbuka";
+
+  return status
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 export default function LiveStatus() {
-  const gate = gates[0];
-  const level = gate.level;
+  const {
+    latestDevice,
+    loading,
+    refreshing,
+    error,
+    refresh,
+  } = useLandingMonitoring();
+
+  const latestWaterPercent = latestDevice
+    ? getWaterLevelPercent(latestDevice.waterLevel)
+    : null;
+  const waterPercent = latestWaterPercent ?? 0;
+  const formattedWaterPercent = formatPercent(latestWaterPercent);
+  const formattedGateStatus = formatGateStatus(latestDevice?.gateStatus);
+
+  const cards = useMemo(
+    () => [
+      {
+        icon: Activity,
+        label: "Status pintu",
+        metric: formattedGateStatus,
+        detail: latestDevice?.deviceId,
+        className: statusTextClass(latestDevice?.waterStatus),
+      },
+      {
+        icon: Waves,
+        label: "Tinggi air",
+        metric: formattedWaterPercent,
+        suffix: "%",
+        detail: "Berdasarkan sensor water level",
+        className: statusTextClass(latestDevice?.waterStatus),
+      },
+      {
+        icon: Ruler,
+        label: "Sensor ultrasonik",
+        metric:
+          latestDevice && Number.isFinite(latestDevice.distanceCm)
+            ? latestDevice.distanceCm.toFixed(1)
+            : null,
+        suffix: " cm",
+        detail: latestDevice?.source,
+        className: "text-[#0F172A]",
+      },
+      {
+        icon: CheckCircle,
+        label: "Status air",
+        metric: latestDevice?.waterStatus,
+        detail: "Hasil pembacaan sensor terbaru",
+        className: statusTextClass(latestDevice?.waterStatus),
+      },
+      {
+        icon: Gauge,
+        label: "Status gate",
+        metric: formattedGateStatus,
+        detail: "Kondisi pintu air terakhir",
+        className: "text-[#0F766E]",
+      },
+      {
+        icon: Clock,
+        label: "Pembaruan terakhir",
+        metric: latestDevice?.lastUpdateLabel,
+        detail: "Dibaca dari DynamoDB",
+        className: "text-[#0F172A]",
+      },
+    ],
+    [formattedGateStatus, formattedWaterPercent, latestDevice]
+  );
 
   return (
-    <section
-      id="live-status"
-      className="relative py-28 px-6 transition-colors duration-500 bg-gradient-to-b from-[#020d1a] via-[#04111f] to-[#05182b]"
-    >
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-900/50 to-transparent" />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-cyan-500/10 rounded-full blur-[120px] opacity-0 group-[.active]:opacity-100 transition-opacity duration-700" />
-        <div className="absolute top-[20%] right-[10%] w-[300px] h-[300px] bg-blue-500/10 rounded-full blur-[100px] opacity-0 group-[.active]:opacity-100 transition-opacity duration-700" />
-      </div>
-
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-32 bg-gradient-to-b from-transparent via-cyan-500/30 to-transparent" />
-      </div>
-
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-[-10%] left-[15%] w-[420px] h-[420px] bg-cyan-500/10 rounded-full blur-[120px]" />
-        <div className="absolute bottom-[-15%] right-[10%] w-[360px] h-[360px] bg-blue-500/10 rounded-full blur-[120px]" />
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-32 bg-gradient-to-b from-transparent via-cyan-500/20 to-transparent" />
-      </div>
-
-      <div className="max-w-6xl mx-auto">
-        <div className="text-center mb-14">
-          <p className="text-cyan-400 text-xs font-semibold tracking-widest uppercase mb-4">
-            Status Terkini
-          </p>
-          <h2 className="font-bold text-3xl md:text-4xl text-white mb-4">
-            Live Preview
-          </h2>
-          <div className="flex items-center justify-center gap-2 text-slate-400 text-sm">
-            <span className="relative flex h-2 w-2">
-              <span className="pulse-ring absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
-            </span>
-            Data diperbarui setiap 1.5 detik
+    <section id="live-status" className="bg-[#F8FAFC] px-5 py-24 md:px-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-12 flex flex-col justify-between gap-6 md:flex-row md:items-end">
+          <div className="max-w-3xl">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#99F6E4] bg-white px-3 py-1.5 text-sm font-semibold text-[#0F766E]">
+              <span className="status-pulse relative inline-flex h-2.5 w-2.5 rounded-full bg-[#14B8A6] before:absolute before:inset-0 before:rounded-full before:bg-[#14B8A6]" />
+              Monitoring langsung dari DynamoDB
+            </div>
+            <h2 className="text-3xl font-semibold tracking-normal text-[#0F172A] md:text-5xl">
+              Kondisi pintu air terbaru.
+            </h2>
+            <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-600">
+              Bagian ini mengambil snapshot perangkat dari endpoint DynamoDB
+              proyek. Jika belum ada item sensor atau konfigurasi backend belum
+              lengkap, halaman hanya menampilkan status kosong.
+            </p>
           </div>
+
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            className="inline-flex w-fit items-center gap-2 rounded-lg bg-[#0F172A] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(15,23,42,0.18)] transition-all hover:-translate-y-0.5 hover:bg-[#1E293B]"
+          >
+            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+            Perbarui
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 gap-5">
-          <div className="relative p-7 rounded-2xl bg-gradient-to-br from-white/[0.04] to-white/[0.01] border border-white/[0.08] glow-border transition-all duration-300 overflow-hidden">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-cyan-500/5 rounded-bl-[80px]" />
-            <div className="absolute top-4 right-4 w-16 h-16 border border-cyan-500/10 rounded-full" />
+        {error && (
+          <p className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Data backend belum tersedia penuh: {error}
+          </p>
+        )}
 
-            <div className="relative">
-              <div className="flex items-start justify-between mb-6">
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-extrabold text-2xl text-white">
-                      {gate.label}
-                    </span>
-                    <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded-md">
-                      {gate.location}
-                    </span>
-                  </div>
-
-                  <p
-                    className="text-slate-400 text-xs font-mono"
-                    suppressHydrationWarning
-                  >
-                    Diperbarui: {new Date().toLocaleTimeString("id-ID")}
-                  </p>
-                </div>
-
-                <GateStatusBadge open={gate.open} />
+        <div className="grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-xl border border-[#CFE7F3] bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
+            <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-sm font-medium text-slate-500">Perangkat</p>
+                <h3 className="mt-1 text-3xl font-semibold text-[#0F172A]">
+                  {displayValue(loading, latestDevice?.deviceId)}
+                </h3>
               </div>
+              <span
+                className={`inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold ${statusBadgeClass(
+                  latestDevice?.waterStatus
+                )}`}
+              >
+                <span className="h-2 w-2 rounded-full bg-current" />
+                {displayValue(loading, latestDevice?.waterStatus)}
+              </span>
+            </div>
 
-              <div className="flex items-end gap-3 mb-8">
-                <span className="font-extrabold text-6xl md:text-7xl bg-gradient-to-br from-cyan-200 to-cyan-500 bg-clip-text text-transparent">
-                  {level.toFixed(2)}
-                </span>
-                <div className="pb-2">
-                  <span className="text-slate-400 text-xl font-light">m</span>
-                  <p className="text-slate-500 text-xs mt-1">ketinggian air</p>
-                </div>
-              </div>
+            <div className="grid gap-4 md:grid-cols-2">
+              {cards.slice(0, 4).map((card) => {
+                const Icon = card.icon;
 
-              <WaterLevelBar level={level} max={gate.max} />
-
-              <div className="grid grid-cols-3 gap-3 mt-6">
-                {[
-                  {
-                    label: "Status Pintu",
-                    value: gate.open ? "Terbuka" : "Tertutup",
-                  },
-                  {
-                    label: "Batas Aman",
-                    value: `${gate.max * 0.8}m`,
-                  },
-                  {
-                    label: "Sensor",
-                    value: "Online",
-                  },
-                ].map((item) => (
+                return (
                   <div
-                    key={item.label}
-                    className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.06] text-center"
+                    key={card.label}
+                    className="rounded-lg border border-[#DCEFED] bg-[#FAFFFE] p-5 transition-all hover:-translate-y-1 hover:shadow-[0_16px_36px_rgba(20,184,166,0.1)]"
                   >
-                    <p className="text-white font-semibold text-sm">
-                      {item.value}
+                    <div className="mb-7 flex items-center justify-between gap-4">
+                      <p className="text-sm font-medium text-slate-500">
+                        {card.label}
+                      </p>
+                      <Icon size={21} className="text-[#0F766E]" />
+                    </div>
+                    <p
+                      className={`min-h-9 text-2xl font-semibold tracking-normal ${card.className}`}
+                    >
+                      {displayValue(loading, card.metric, card.suffix)}
                     </p>
-                    <p className="text-slate-500 text-[10px] mt-0.5">
-                      {item.label}
+                    <p className="mt-2 text-sm text-slate-500">
+                      {displayValue(false, card.detail)}
                     </p>
                   </div>
-                ))}
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-[#CFE7F3] bg-[#0F172A] p-5 text-white shadow-[0_24px_70px_rgba(15,23,42,0.2)]">
+            <div className="mb-8">
+              <p className="text-sm font-medium text-cyan-200">
+                Tinggi air terbaru
+              </p>
+              <p className="mt-2 text-5xl font-semibold">
+                {displayValue(
+                  loading,
+                  formattedWaterPercent,
+                  "%"
+                )}
+              </p>
+              <p className="mt-1 text-sm text-slate-300">
+                Berdasarkan sensor water level
+              </p>
+            </div>
+
+            <div className="mb-8">
+              <div className="mb-2 flex items-center justify-between text-xs text-slate-300">
+                <span>0%</span>
+                <span>
+                  {latestDevice && Number.isFinite(latestDevice.waterLevel)
+                    ? `Water level ${latestDevice.waterLevel}%`
+                    : "Menunggu data water level"}
+                </span>
+                <span>100%</span>
               </div>
+              <div className="h-2 overflow-hidden rounded-full bg-white/15">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[#14B8A6] to-[#38BDF8]"
+                  style={{ width: `${waterPercent}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              {cards.slice(4).map((card) => {
+                const Icon = card.icon;
+
+                return (
+                  <div
+                    key={card.label}
+                    className="rounded-lg border border-white/10 bg-white/[0.06] p-4"
+                  >
+                    <div className="mb-4 flex items-center justify-between gap-4">
+                      <p className="text-sm text-slate-300">{card.label}</p>
+                      <Icon size={18} className="text-cyan-200" />
+                    </div>
+                    <p className="text-xl font-semibold text-white">
+                      {displayValue(loading, card.metric, card.suffix)}
+                    </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      {card.detail}
+                    </p>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

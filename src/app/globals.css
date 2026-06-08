@@ -1,5 +1,14 @@
 @import "tailwindcss";
 
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #ffffff;
+  color: #111111;
+}
+
 /* Animasi untuk landing page */
 @keyframes fadeUp {
   from {
@@ -44,5 +53,20 @@
 
 .pulse-ring {
   animation: pulseRing 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+}
+
+@keyframes statusPulse {
+  0%, 100% {
+    opacity: 0.35;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.1;
+    transform: scale(1.9);
+  }
+}
+
+.status-pulse::before {
+  animation: statusPulse 1.8s ease-in-out infinite;
 }
 
