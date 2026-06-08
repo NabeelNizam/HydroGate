@@ -1,102 +1,133 @@
 "use client";
 
+import {
+  ArrowDownRight,
+  ArrowRight,
+  Database,
+  Radio,
+  Wifi,
+} from "lucide-react";
+import { useLandingMonitoring } from "./landing-monitoring";
+import RiverMonitoringMap from "./RiverMonitoringMap";
+
+function displayMetric(
+  loading: boolean,
+  value: number | string | null | undefined
+) {
+  if (loading) return "Memuat data...";
+  if (value === null || value === undefined || value === "") {
+    return "Data belum tersedia";
+  }
+
+  return String(value);
+}
+
 export default function Hero() {
-    return (
-        <section
-            id="home"
-            className="relative min-h-screen flex flex-col items-center justify-center overflow-hidden pt-25 pb-32">
+  const {
+    devices,
+    totalDevices,
+    totalRecords,
+    onlineDevices,
+    loading,
+    error,
+    lastFetchedAt,
+  } = useLandingMonitoring();
 
-            <div className="absolute inset-0 bg-[#020d1a]">
-                <div className="mesh-bg absolute inset-0">
-                    <div className="absolute top-[-20%] left-[10%] w-[600px] h-[600px] bg-cyan-900/20 rounded-full blur-[120px]" />
-                    <div className="absolute top-[20%] right-[-10%] w-[500px] h-[500px] bg-blue-900/25 rounded-full blur-[100px]" />
-                    <div className="absolute bottom-[-10%] left-[30%] w-[400px] h-[400px] bg-teal-900/20 rounded-full blur-[90px]" />
+  const summaryCards = [
+    {
+      icon: Radio,
+      label: "Perangkat terdaftar",
+      value: totalDevices > 0 ? totalDevices : null,
+    },
+    {
+      icon: Wifi,
+      label: "Perangkat online",
+      value: totalDevices > 0 ? onlineDevices : null,
+    },
+    {
+      icon: Database,
+      label: "Data sensor",
+      value: totalRecords,
+    },
+  ];
+
+  return (
+    <section
+      id="home"
+      className="relative overflow-hidden bg-white px-5 pt-32 pb-20 md:px-8 md:pt-40"
+    >
+      <div className="absolute inset-x-0 top-0 h-48 bg-gradient-to-b from-[#E0F2FE] via-white to-white" />
+      <div className="relative mx-auto grid max-w-7xl items-center gap-14 lg:grid-cols-[0.82fr_1.18fr]">
+        <div className="max-w-4xl">
+          <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-[#BAE6FD] bg-white px-3 py-1.5 text-xs font-semibold text-[#075985] shadow-[0_10px_30px_rgba(56,189,248,0.12)]">
+            <span className="relative flex h-2 w-2">
+              <span className="pulse-ring absolute inline-flex h-full w-full rounded-full bg-[#14B8A6] opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#14B8A6]" />
+            </span>
+            Platform IoT untuk operasi pintu air
+          </div>
+
+          <h1 className="max-w-5xl text-[clamp(2.6rem,6vw,5.1rem)] font-bold leading-[0.98] tracking-normal text-[#0F172A]">
+            HydroGate
+          </h1>
+          <p className="mt-5 max-w-3xl text-2xl font-semibold leading-tight text-[#0F766E] md:text-3xl">
+            Monitoring dan kontrol pintu air berbasis IoT secara terpusat.
+          </p>
+
+          <p className="mt-6 max-w-2xl text-base leading-7 text-slate-600 md:text-lg md:leading-8">
+            HydroGate membantu petugas memantau tinggi air, kondisi perangkat,
+            status pintu air, dan riwayat sensor dari satu antarmuka yang rapi,
+            cepat dibaca, dan siap digunakan untuk pengambilan keputusan.
+          </p>
+
+          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+            <a
+              href="/auth/login"
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#0F172A] px-6 py-3 text-sm font-semibold text-white shadow-[0_16px_38px_rgba(15,23,42,0.2)] transition-all hover:-translate-y-0.5 hover:bg-[#1E293B]"
+            >
+              Lihat Dasbor
+              <ArrowRight size={16} />
+            </a>
+            <a
+              href="#live-status"
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#99F6E4] bg-white px-6 py-3 text-sm font-semibold text-[#0F766E] shadow-[0_12px_30px_rgba(20,184,166,0.12)] transition-all hover:-translate-y-0.5 hover:border-[#14B8A6] hover:bg-[#F0FDFA]"
+            >
+              Monitoring Langsung
+              <ArrowDownRight size={16} />
+            </a>
+          </div>
+
+          <div className="mt-12 grid max-w-3xl gap-3 sm:grid-cols-3">
+            {summaryCards.map((stat) => {
+              const Icon = stat.icon;
+
+              return (
+                <div
+                  key={stat.label}
+                  className="rounded-lg border border-[#E2E8F0] bg-white p-4 shadow-[0_12px_32px_rgba(15,23,42,0.05)]"
+                >
+                  <Icon size={18} className="mb-5 text-[#0F766E]" />
+                  <p className="min-h-8 text-2xl font-semibold tracking-normal text-[#0F172A]">
+                    {displayMetric(loading, stat.value)}
+                  </p>
+                  <p className="mt-1 text-xs font-medium text-slate-500">
+                    {stat.label}
+                  </p>
                 </div>
-            </div>
+              );
+            })}
+          </div>
+        </div>
 
-
-
-            <div
-                className="absolute inset-0 opacity-[0.03]"
-                style={{
-                    backgroundImage:
-                        "linear-gradient(rgba(34,211,238,1) 1px, transparent 1px), linear-gradient(90deg, rgba(34,211,238,1) 1px, transparent 1px)",
-                    backgroundSize: "60px 60px",
-                }}
-            />
-
-            <div className="relative z-10 max-w-3xl mx-auto px-6 text-center">
-                <div className="fade-up fade-up-delay-1 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold tracking-widest uppercase mb-6">
-                    <span className="relative flex h-2 w-2">
-                        <span className="pulse-ring absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-400" />
-                    </span>
-                    Sistem Aktif — Real-Time
-                </div>
-
-                <h1 className="fade-up fade-up-delay-2 font-semibold tracking-tight text-4xl sm:text-5xl md:text-6xl lg:text-7xl leading-[1.1] mb-6">
-                    <span className="text-white">Pantau Pintu Air</span>
-                    <br />
-                    <span className="bg-gradient-to-r from-cyan-300 via-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                        Bendungan
-                    </span>{" "}
-                    <span className="text-white">Secara</span>
-                    <br />
-                    <span className="text-slate-400 font-normal">Real-Time</span>
-                </h1>
-
-                <p className="fade-up fade-up-delay-3 text-slate-400 text-base md:text-lg leading-relaxed mb-10 max-w-xl mx-auto">
-                    Sistem monitoring cerdas untuk pengawasan ketinggian air dan status
-                    buka/tutup pintu bendungan — kapan saja, dari mana saja.
-                </p>
-
-                <div className="fade-up fade-up-delay-4 flex flex-col sm:flex-row gap-4 justify-center mb-14">
-                    <a
-                        href="#live-status"
-                        className="group relative px-8 py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white font-semibold text-base overflow-hidden shadow-xl shadow-cyan-500/25 hover:shadow-cyan-500/40 transition-all duration-300"
-                    >
-                        <span className="relative z-10 flex items-center gap-2 justify-center">
-                            Lihat Monitoring
-                            <svg className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-200" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                            </svg>
-                        </span>
-                        <div className="absolute inset-0 bg-white/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300" />
-                    </a>
-
-                    <a
-                        href="#features"
-                        className="px-8 py-3.5 rounded-xl border border-white/10 text-slate-300 font-semibold text-base hover:border-cyan-500/40 hover:text-white hover:bg-white/5 transition-all duration-300"
-                    >
-                        Pelajari Fitur
-                    </a>
-                </div>
-
-                <div className="fade-up fade-up-delay-4 grid grid-cols-3 gap-4 max-w-md mx-auto">
-                    {[
-                        { value: "24/7", label: "Pemantauan" },
-                        { value: "<1s", label: "Latensi Data" },
-                        { value: "99.9%", label: "Uptime" },
-                    ].map((stat) => (
-                        <div
-                            key={stat.label}
-                            className="flex flex-col items-center gap-1 p-4 rounded-xl bg-white/[0.03] border border-white/[0.06]"
-                        >
-                            <span className="font-semibold text-xl text-cyan-300">
-                                {stat.value}
-                            </span>
-                            <span className="text-slate-500 text-xs tracking-wide">
-                                {stat.label}
-                            </span>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1">
-                <span className="text-slate-600 text-xs tracking-widest uppercase">Scroll</span>
-                <div className="scroll-bounce w-px h-8 bg-gradient-to-b from-cyan-500/50 to-transparent" />
-            </div>
-        </section>
-    );
+        <div className="relative">
+          <RiverMonitoringMap
+            devices={devices}
+            loading={loading}
+            error={error}
+            nowMs={lastFetchedAt?.getTime() ?? 0}
+          />
+        </div>
+      </div>
+    </section>
+  );
 }

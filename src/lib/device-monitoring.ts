@@ -8,6 +8,7 @@ export type DynamoDeviceItem = {
   gate_status?: string;
   servo_angle?: number | string;
   datetime?: string;
+  unix_time?: number | string;
   source?: string;
   timestamp?: string | number;
   createdAt?: string | number;
@@ -76,6 +77,9 @@ export function toTimestampMs(value: unknown): number {
 }
 
 export function getItemTimestampMs(item: DynamoDeviceItem): number {
+  const fromUnixTime = toTimestampMs(item.unix_time);
+  if (fromUnixTime > 0) return fromUnixTime;
+
   const fromTimestamp = toTimestampMs(item.timestamp);
   if (fromTimestamp > 0) return fromTimestamp;
 

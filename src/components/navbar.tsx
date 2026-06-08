@@ -4,11 +4,12 @@ import { useEffect, useState } from "react"
 import Image from "next/image"
 
 const sections = [
-    { id: "home", label: "Home" },
-    { id: "about", label: "About" },
-    { id: "flow", label: "Flow" },
-    { id: "features", label: "Features" },
-    { id: "live-status", label: "Live Status" },
+    { id: "home", label: "Beranda" },
+    { id: "about", label: "Tentang" },
+    { id: "features", label: "Fitur" },
+    { id: "statistics", label: "Statistik" },
+    { id: "live-status", label: "Monitoring" },
+    { id: "workflow", label: "Cara Kerja" },
 ]
 
 export default function Navbar() {
@@ -42,28 +43,29 @@ export default function Navbar() {
     }, [])
 
     const linkClass = (id: string) =>
-        `relative pb-1 transition-all duration-300 ${active === id
-            ? "text-cyan-400"
-            : "text-white/80 hover:text-cyan-400"
+        `relative py-2 text-sm font-medium transition-colors duration-200 ${active === id
+            ? "text-[#0B3558]"
+            : "text-[#6B7280] hover:text-[#0B3558]"
         }`
 
     return (
-        <nav className="fixed top-0 left-0 z-50 w-full bg-[#020d1a]/80 backdrop-blur-md border-b border-white/5">
-            <div className="px-32 flex items-center justify-between py-4">
+        <nav className="fixed left-0 top-0 z-50 w-full border-b border-[#E5E5E5] bg-white/90 backdrop-blur-md">
+            <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4 md:px-8">
+                <a href="#home" className="flex items-center gap-3">
+                    <Image
+                        src="/logo_hydrogate.svg"
+                        alt="Logo HydroGate"
+                        width={40}
+                        height={40}
+                        priority
+                        className="rounded-lg"
+                    />
+                    <span className="text-sm font-semibold tracking-normal text-[#111111]">
+                        HydroGate
+                    </span>
+                </a>
 
-                {/* Logo */}
-                <Image
-                    src="/logo_hydrogate.svg"
-                    alt="Logo"
-                    width={60}
-                    height={60}
-                    priority
-                    className="rounded-full z-60"
-                />
-
-                {/* Navigation */}
-                <div className="hidden lg:flex items-center gap-12 pr-12 text-sm font-medium uppercase tracking-wide">
-
+                <div className="hidden items-center gap-6 lg:flex">
                     {sections.map((section) => (
                         <a
                             key={section.id}
@@ -71,31 +73,20 @@ export default function Navbar() {
                             className={linkClass(section.id)}
                         >
                             {section.label}
-
-                            {/* Active Indicator */}
                             <span
-                                className={`absolute left-0 -bottom-1 h-[2px] bg-cyan-400 transition-all duration-300 ${active === section.id
+                                className={`absolute inset-x-0 bottom-0 h-px bg-[#14B8A6] transition-all duration-200 ${active === section.id
                                         ? "w-full opacity-100"
                                         : "w-0 opacity-0"
-                                    }`}
-                            />
-
-                            {/* Glow Effect */}
-                            <span
-                                className={`absolute inset-x-0 -bottom-[6px] h-[10px] bg-cyan-400/20 blur-md transition-all duration-300 ${active === section.id
-                                        ? "opacity-100"
-                                        : "opacity-0"
                                     }`}
                             />
                         </a>
                     ))}
 
-                    {/* Login Button */}
                     <a
-                        href="auth/login"
-                        className="ml-4 px-5 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-xs font-semibold tracking-wide shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/40 hover:scale-[1.03] transition-all duration-300"
+                        href="/auth/login"
+                        className="rounded-lg border border-[#0B3558] bg-[#0B3558] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-white hover:text-[#0B3558]"
                     >
-                        Login
+                        Masuk
                     </a>
                 </div>
             </div>

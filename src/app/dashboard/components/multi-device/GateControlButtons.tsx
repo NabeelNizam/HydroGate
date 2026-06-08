@@ -8,7 +8,7 @@ type GateControlButtonsProps = {
   compact?: boolean;
 };
 
-type CommandType = "OPEN" | "CLOSE";
+type CommandType = "OPEN" | "HALF" | "CLOSE";
 
 export default function GateControlButtons({
   deviceId,
@@ -50,7 +50,7 @@ export default function GateControlButtons({
   const sizeClass = compact ? "px-3 py-2 text-xs" : "px-4 py-2 text-sm";
 
   return (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       <button
         type="button"
         onClick={(event) => {
@@ -58,9 +58,20 @@ export default function GateControlButtons({
           void sendCommand("OPEN");
         }}
         disabled={sendingCommand !== null}
-        className={`rounded-lg bg-emerald-600 font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60 ${sizeClass}`}
+        className={`rounded-lg bg-red-600 font-semibold text-white transition hover:bg-red-700 disabled:opacity-60 ${sizeClass}`}
       >
-        {sendingCommand === "OPEN" ? "Opening..." : "Open Gate"}
+        {sendingCommand === "OPEN" ? "Mengirim..." : "Buka Penuh"}
+      </button>
+      <button
+        type="button"
+        onClick={(event) => {
+          event.stopPropagation();
+          void sendCommand("HALF");
+        }}
+        disabled={sendingCommand !== null}
+        className={`rounded-lg bg-yellow-500 font-semibold text-white transition hover:bg-yellow-600 disabled:opacity-60 ${sizeClass}`}
+      >
+        {sendingCommand === "HALF" ? "Mengirim..." : "Buka Separuh"}
       </button>
       <button
         type="button"
@@ -69,9 +80,9 @@ export default function GateControlButtons({
           void sendCommand("CLOSE");
         }}
         disabled={sendingCommand !== null}
-        className={`rounded-lg bg-rose-600 font-semibold text-white transition hover:bg-rose-700 disabled:opacity-60 ${sizeClass}`}
+        className={`rounded-lg bg-emerald-600 font-semibold text-white transition hover:bg-emerald-700 disabled:opacity-60 ${sizeClass}`}
       >
-        {sendingCommand === "CLOSE" ? "Closing..." : "Close Gate"}
+        {sendingCommand === "CLOSE" ? "Mengirim..." : "Tutup Gate"}
       </button>
     </div>
   );

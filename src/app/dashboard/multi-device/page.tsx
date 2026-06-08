@@ -1,14 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 import { DeviceSnapshot } from "@/lib/device-monitoring";
 import DeviceCard from "../components/multi-device/DeviceCard";
-import DeviceFilter from "../components/multi-device/DeviceFilter";
-import DeviceSearch from "../components/multi-device/DeviceSearch";
-import { DeviceFilterValue } from "../components/multi-device/device-ui-types";
 
 type DevicesResponse = {
   devices?: DeviceSnapshot[];
@@ -23,8 +20,6 @@ export default function MultiDevicePage() {
   const [devices, setDevices] = useState<DeviceSnapshot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<DeviceFilterValue>("ALL");
   const [nowMs, setNowMs] = useState(0);
 
   const fetchDevices = useCallback(async () => {
@@ -69,36 +64,6 @@ export default function MultiDevicePage() {
     };
   }, [fetchDevices]);
 
-  const filteredDevices = useMemo(() => {
-    const keyword = search.trim().toLowerCase();
-
-    return devices.filter((device) => {
-      const isOnline =
-        device.timestampMs > 0 &&
-        nowMs > 0 &&
-        nowMs - device.timestampMs < ONLINE_WINDOW_MS;
-      const matchSearch = keyword.length === 0 || device.deviceId.toLowerCase().includes(keyword);
-
-      if (!matchSearch) {
-        return false;
-      }
-
-      if (filter === "ALL") {
-        return true;
-      }
-
-      if (filter === "ONLINE") {
-        return isOnline;
-      }
-
-      if (filter === "OFFLINE") {
-        return !isOnline;
-      }
-
-      return device.waterStatus === filter;
-    });
-  }, [devices, filter, nowMs, search]);
-
   return (
     <div className="flex min-h-screen bg-slate-100">
       <Sidebar />
@@ -121,11 +86,6 @@ export default function MultiDevicePage() {
             </button>
           </div>
 
-          <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4">
-            <DeviceSearch value={search} onChange={setSearch} />
-            <DeviceFilter value={filter} onChange={setFilter} />
-          </div>
-
           {error && (
             <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
               {error}
@@ -138,14 +98,14 @@ export default function MultiDevicePage() {
             </div>
           )}
 
-          {!loading && filteredDevices.length === 0 && (
+          {!loading && devices.length === 0 && (
             <div className="mb-6 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-700">
-              Tidak ada device yang cocok dengan pencarian atau filter.
+              Belum ada device yang tersedia.
             </div>
           )}
 
           <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-            {filteredDevices.map((device) => (
+            {devices.map((device) => (
               <DeviceCard
                 key={`${device.deviceId}-${device.timestampMs}`}
                 device={device}

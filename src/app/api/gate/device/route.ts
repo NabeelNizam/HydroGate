@@ -4,7 +4,7 @@ import {
   PublishCommand,
 } from "@aws-sdk/client-iot-data-plane";
 
-type GateCommand = "OPEN" | "CLOSE";
+type GateCommand = "OPEN" | "HALF" | "CLOSE";
 
 type RequestBody = {
   deviceId?: string;
@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "deviceId wajib diisi" }, { status: 400 });
     }
 
-    if (!["OPEN", "CLOSE"].includes(command)) {
+    if (!["OPEN", "HALF", "CLOSE"].includes(command)) {
       return NextResponse.json({ error: "Command tidak valid" }, { status: 400 });
     }
 
@@ -48,23 +48,39 @@ export async function POST(req: Request) {
       endpoint: resolveEndpoint(endpoint),
     });
 
-    await iotClient.send(
-      new PublishCommand({
-        topic: `hydrogate/control/${deviceId}`,
-        qos: 1,
-        payload: Buffer.from(
-          JSON.stringify({
-            command,
-          })
-        ),
+    const payload = Buffer.from(
+      JSON.stringify({
+        command,
+        deviceId,
+        source: "website",
+        timestamp: Date.now(),
       })
     );
+    const deviceTopic = `hydrogate/control/${deviceId}`;
+    const globalTopic = "hydrogate/gate/control";
+
+    await Promise.all([
+      iotClient.send(
+        new PublishCommand({
+          topic: deviceTopic,
+          qos: 1,
+          payload,
+        })
+      ),
+      iotClient.send(
+        new PublishCommand({
+          topic: globalTopic,
+          qos: 1,
+          payload,
+        })
+      ),
+    ]);
 
     return NextResponse.json({
       success: true,
       deviceId,
       command,
-      topic: `hydrogate/control/${deviceId}`,
+      topics: [deviceTopic, globalTopic],
     });
   } catch (error) {
     console.error("IoT device publish error:", error);

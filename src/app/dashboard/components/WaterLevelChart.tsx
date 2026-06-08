@@ -34,49 +34,51 @@ export default function WaterLevelChart() {
         <p className="text-sm text-slate-500 mt-1">Real-time monitoring over the last 24 hours</p>
       </div>
 
-      <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={chartData}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-          <XAxis
-            dataKey="time"
-            stroke="#94a3b8"
-            style={{ fontSize: '12px' }}
-          />
-          <YAxis
-            stroke="#94a3b8"
-            style={{ fontSize: '12px' }}
-            label={{ value: 'Level (m)', angle: -90, position: 'insideLeft' }}
-          />
-          <Tooltip
-            contentStyle={{
-              backgroundColor: '#1e293b',
-              border: '1px solid #475569',
-              borderRadius: '8px',
-              color: '#fff',
-            }}
-            formatter={(value) => `${value}m`}
-          />
-          <Legend />
-          <Line
-            type="monotone"
-            dataKey="level"
-            stroke="#3b82f6"
-            strokeWidth={3}
-            dot={{ fill: '#3b82f6', r: 4 }}
-            activeDot={{ r: 6 }}
-            name="Current Level"
-          />
-          <Line
-            type="monotone"
-            dataKey="threshold"
-            stroke="#ef4444"
-            strokeWidth={2}
-            strokeDasharray="5 5"
-            dot={false}
-            name="Critical Threshold"
-          />
-        </LineChart>
-      </ResponsiveContainer>
+      <div className="min-w-0">
+        <ResponsiveContainer width="100%" height={300} minWidth={0}>
+          <LineChart data={chartData}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <XAxis
+              dataKey="time"
+              stroke="#94a3b8"
+              style={{ fontSize: '12px' }}
+            />
+            <YAxis
+              stroke="#94a3b8"
+              style={{ fontSize: '12px' }}
+              label={{ value: 'Level (m)', angle: -90, position: 'insideLeft' }}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: '#1e293b',
+                border: '1px solid #475569',
+                borderRadius: '8px',
+                color: '#fff',
+              }}
+              formatter={(value) => `${value}m`}
+            />
+            <Legend />
+            <Line
+              type="monotone"
+              dataKey="level"
+              stroke="#3b82f6"
+              strokeWidth={3}
+              dot={{ fill: '#3b82f6', r: 4 }}
+              activeDot={{ r: 6 }}
+              name="Current Level"
+            />
+            <Line
+              type="monotone"
+              dataKey="threshold"
+              stroke="#ef4444"
+              strokeWidth={2}
+              strokeDasharray="5 5"
+              dot={false}
+              name="Critical Threshold"
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
 
       {/* Info Bar */}
       <div className="grid grid-cols-3 gap-4 mt-6 pt-6 border-t border-slate-200">
