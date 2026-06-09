@@ -2,14 +2,13 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 
 const execFileAsync = promisify(execFile);
+const HDFS_RESULT_STATUSES = new Set(["AMAN", "SIAGA", "BAHAYA"]);
 
-export type AnalisisData = {
-  device_id: string;
-  processed_at: string;
-  avg_water_level: number | null;
-  avg_jarak_cm: number | null;
-  dominant_status: string | null;
-  danger_count: number | null;
+export type HdfsResultData = {
+  deviceId: string;
+  date: string;
+  status: string;
+  count: number;
 };
 
 export type SensorPayload = {
@@ -30,6 +29,17 @@ export function getHdfsConfig() {
     outputPath: process.env.HYDROGATE_HDFS_OUTPUT || "/hydrogate/output",
     jarPath: process.env.HYDROGATE_JAR_PATH || "/home/hadoopuser/hydrogate.jar",
     mainClass: process.env.HYDROGATE_MAIN_CLASS || "id.ac.polinema.App",
+    remoteTmpPath: process.env.HYDROGATE_REMOTE_TMP || "/tmp",
+  };
+}
+
+export function getHadoopSshConfig() {
+  const port = Number(process.env.HADOOP_SSH_PORT || "22");
+
+  return {
+    host: process.env.HADOOP_SSH_HOST || "192.168.18.62",
+    user: process.env.HADOOP_SSH_USER || "hadoopuser",
+    port: Number.isInteger(port) && port > 0 ? String(port) : "22",
   };
 }
 
@@ -116,58 +126,161 @@ export async function runCommand(file: string, args: string[]) {
   }
 }
 
-function toNumberOrNull(value: unknown) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizeResultObject(item: Record<string, unknown>): AnalisisData | null {
-  const deviceId = String(item.device_id || item.deviceId || "").trim();
-
-  if (!deviceId) {
-    return null;
-  }
+function getCommandDetail(error: unknown) {
+  const err = error as NodeJS.ErrnoException & {
+    stderr?: string;
+    stdout?: string;
+  };
 
   return {
-    device_id: deviceId,
-    processed_at: String(item.processed_at || item.processedAt || item.datetime || ""),
-    avg_water_level: toNumberOrNull(item.avg_water_level ?? item.avgWaterLevel ?? item.water_level),
-    avg_jarak_cm: toNumberOrNull(item.avg_jarak_cm ?? item.avgJarakCm ?? item.jarak_cm),
-    dominant_status: item.dominant_status || item.dominantStatus || item.status ? String(item.dominant_status || item.dominantStatus || item.status) : null,
-    danger_count: toNumberOrNull(item.danger_count ?? item.dangerCount),
+    code: err.code,
+    detail: (err.stderr || err.stdout || err.message || String(error)).trim(),
   };
 }
 
-function parseColumns(line: string): AnalisisData | null {
-  const columns = line.includes("\t") ? line.split("\t") : line.split(",");
-  const trimmed = columns.map((item) => item.trim()).filter(Boolean);
+function formatSshError(tool: "ssh" | "scp", detail: string, commandArgs: string[]) {
+  const normalized = detail.toLowerCase();
+  const commandText = commandArgs.join(" ");
+  const remoteCommand = commandArgs[0] || "";
 
-  if (trimmed.length < 5) {
-    return null;
+  if (normalized.includes("permission denied") || normalized.includes("publickey") || normalized.includes("password")) {
+    return "Gagal login SSH ke VM Hadoop. Pastikan SSH tanpa password dari server Next.js ke NameNode sudah aktif.";
   }
 
-  if (trimmed.length >= 6 && !Number.isFinite(Number(trimmed[1]))) {
+  if (normalized.includes("connection timed out") || normalized.includes("no route to host") || normalized.includes("could not resolve hostname") || normalized.includes("connection refused")) {
+    return `Gagal koneksi ke VM Hadoop. Periksa HADOOP_SSH_HOST, HADOOP_SSH_PORT, jaringan, dan service SSH. Detail: ${detail}`;
+  }
+
+  if (tool === "scp" && normalized.includes("not found")) {
+    return "Command scp tidak ditemukan di server Next.js.";
+  }
+
+  if (commandText.includes("hydrogate.jar") && (normalized.includes("no such file") || normalized.includes("not found") || normalized.includes("does not exist") || normalized.includes("unable to access jarfile") || normalized.includes("not a normal file"))) {
+    return "File JAR analisis tidak ditemukan di VM Hadoop. Pastikan /home/hadoopuser/hydrogate.jar tersedia atau HYDROGATE_JAR_PATH sudah benar.";
+  }
+
+  if (remoteCommand.includes("hdfs") && isRemoteCommandMissing(detail, remoteCommand)) {
+    return "Command HDFS tidak ditemukan di VM Hadoop. Pastikan HDFS_BIN mengarah ke binary hdfs yang benar.";
+  }
+
+  if (remoteCommand.includes("hadoop") && isRemoteCommandMissing(detail, remoteCommand)) {
+    return "Command Hadoop tidak ditemukan di VM Hadoop. Pastikan HADOOP_BIN mengarah ke binary hadoop yang benar.";
+  }
+
+  return detail || "Command SSH gagal dijalankan.";
+}
+
+function isRemoteCommandMissing(detail: string, command: string) {
+  const normalized = detail.toLowerCase();
+  const normalizedCommand = command.toLowerCase();
+  const commandName = normalizedCommand.split(/[\\/]/).pop() || normalizedCommand;
+
+  return (
+    normalized.includes(`${normalizedCommand}: no such file`) ||
+    normalized.includes(`${normalizedCommand}: not found`) ||
+    normalized.includes(`${commandName}: command not found`) ||
+    normalized.includes(`${commandName}: not found`)
+  );
+}
+
+export async function runSshCommand(remoteArgs: string[]) {
+  const sshConfig = getHadoopSshConfig();
+  const args = ["-p", sshConfig.port, `${sshConfig.user}@${sshConfig.host}`, ...remoteArgs];
+
+  try {
+    const result = await execFileAsync("ssh", args, {
+      timeout: 120_000,
+      maxBuffer: 1024 * 1024 * 10,
+      windowsHide: true,
+    });
+
     return {
-      processed_at: trimmed[0],
-      device_id: trimmed[1],
-      avg_water_level: toNumberOrNull(trimmed[2]),
-      avg_jarak_cm: toNumberOrNull(trimmed[3]),
-      dominant_status: trimmed[4] || null,
-      danger_count: toNumberOrNull(trimmed[5]),
+      stdout: result.stdout,
+      stderr: result.stderr,
     };
+  } catch (error) {
+    const { code, detail } = getCommandDetail(error);
+
+    if (code === "ENOENT") {
+      throw new Error("Command ssh tidak ditemukan di server Next.js.");
+    }
+
+    throw new Error(formatSshError("ssh", detail, remoteArgs));
+  }
+}
+
+export async function copyFileToNameNode(localPath: string, remotePath: string) {
+  const sshConfig = getHadoopSshConfig();
+  const args = ["-P", sshConfig.port, localPath, `${sshConfig.user}@${sshConfig.host}:${remotePath}`];
+
+  try {
+    const result = await execFileAsync("scp", args, {
+      timeout: 120_000,
+      maxBuffer: 1024 * 1024 * 10,
+      cwd: process.cwd(),
+      windowsHide: true,
+    });
+
+    return {
+      stdout: result.stdout,
+      stderr: result.stderr,
+    };
+  } catch (error) {
+    const { code, detail } = getCommandDetail(error);
+
+    if (code === "ENOENT") {
+      throw new Error("Command scp tidak ditemukan di server Next.js.");
+    }
+
+    throw new Error(formatSshError("scp", detail, args));
+  }
+}
+
+function parseResultLine(line: string): HdfsResultData | null {
+  const match = line.trim().match(/^(.+?)\s+(\d+)$/);
+
+  if (!match) {
+    return null;
+  }
+
+  const key = match[1].trim();
+  const count = Number(match[2]);
+  const keyParts = key.split(",").map((item) => item.trim());
+  const status = keyParts.length >= 3 ? keyParts[2] : keyParts[0];
+  const deviceId = keyParts.length >= 3 ? keyParts[0] : "";
+  const date = keyParts.length >= 3 ? keyParts[1] : "";
+
+  if (!status || !HDFS_RESULT_STATUSES.has(status) || !Number.isFinite(count)) {
+    return null;
   }
 
   return {
-    processed_at: "",
-    device_id: trimmed[0],
-    avg_water_level: toNumberOrNull(trimmed[1]),
-    avg_jarak_cm: toNumberOrNull(trimmed[2]),
-    dominant_status: trimmed[3] || null,
-    danger_count: toNumberOrNull(trimmed[4]),
+    deviceId,
+    date,
+    status,
+    count,
   };
 }
 
-export function parseHdfsResult(stdout: string): AnalisisData[] {
+function normalizeResultObject(item: Record<string, unknown>): HdfsResultData | null {
+  const status = String(item.status || item.dominant_status || item.dominantStatus || "").trim();
+  const count = Number(item.count ?? item.total ?? item.danger_count ?? item.dangerCount);
+  const deviceId = String(item.deviceId || item.device_id || "").trim();
+  const date = String(item.date || item.processed_at || item.processedAt || "").trim();
+
+  if (!status || !HDFS_RESULT_STATUSES.has(status) || !Number.isFinite(count)) {
+    return null;
+  }
+
+  return {
+    deviceId,
+    date,
+    status,
+    count,
+  };
+}
+
+export function parseHdfsResult(stdout: string): HdfsResultData[] {
   return stdout
     .split(/\r?\n/)
     .map((line) => line.trim())
@@ -180,12 +293,12 @@ export function parseHdfsResult(stdout: string): AnalisisData[] {
           return normalizeResultObject(parsed as Record<string, unknown>);
         }
       } catch {
-        return parseColumns(line);
+        return parseResultLine(line);
       }
 
-      return parseColumns(line);
+      return parseResultLine(line);
     })
-    .filter((item): item is AnalisisData => Boolean(item));
+    .filter((item): item is HdfsResultData => Boolean(item));
 }
 
 export function isMissingHdfsOutput(message: string) {
