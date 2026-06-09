@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
+import ThresholdSettingsPanel from '../components/ThresholdSettingsPanel';
 
 import {
   Activity,
@@ -23,6 +24,10 @@ type DynamoItem = {
   status?: string;
   gate_status?: string;
   servo_angle?: number | string;
+  water_siaga?: number | string;
+  water_bahaya?: number | string;
+  hcsr_bahaya_cm?: number | string;
+  hcsr_siaga_cm?: number | string;
   datetime?: string;
   unix_time?: number | string;
   source?: string;
@@ -82,6 +87,61 @@ function formatLastUpdate(item: DynamoItem) {
   return '-';
 }
 
+function parseNumericValue(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatPayloadValue(value: unknown, unit = '') {
+  if (value === undefined || value === null || value === '') {
+    return '-';
+  }
+
+  return `${value}${unit ? ` ${unit}` : ''}`;
+}
+
+function getGateState(value: unknown): Pick<MonitoringData, 'gateStatus' | 'gateLabel'> {
+  const normalized = String(value || '').trim().toUpperCase();
+
+  if (normalized === 'TERBUKA' || normalized === 'OPEN' || normalized === 'BAHAYA') {
+    return {
+      gateStatus: 'open',
+      gateLabel: 'Terbuka',
+    };
+  }
+
+  if (
+    normalized === 'SEPARUH TERBUKA' ||
+    normalized === 'HALF' ||
+    normalized === 'HALF OPEN' ||
+    normalized === 'SIAGA'
+  ) {
+    return {
+      gateStatus: 'half',
+      gateLabel: 'Separuh Terbuka',
+    };
+  }
+
+  return {
+    gateStatus: 'closed',
+    gateLabel: 'Tutup',
+  };
+}
+
+async function readJsonResponse<T extends Record<string, unknown>>(response: Response): Promise<T> {
+  const contentType = response.headers.get('content-type') || '';
+
+  if (contentType.includes('application/json')) {
+    return response.json() as Promise<T>;
+  }
+
+  const text = await response.text();
+
+  return {
+    error: text || `HTTP ${response.status}`,
+  } as unknown as T;
+}
+
 export default function Monitoring() {
   const [items, setItems] = useState<DynamoItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,11 +154,11 @@ export default function Monitoring() {
         cache: 'no-store',
       });
 
-      const json: {
+      const json = await readJsonResponse<{
         items?: DynamoItem[];
         error?: string;
         detail?: string;
-      } = await res.json();
+      }>(res);
 
       if (!res.ok) {
         throw new Error(json.detail || json.error || 'Gagal mengambil data');
@@ -129,13 +189,15 @@ export default function Monitoring() {
         method: 'DELETE',
       });
 
-      const json: {
+      const json = await readJsonResponse<{
         success?: boolean;
+        deletedCount?: number;
         error?: string;
-      } = await res.json();
+        detail?: string;
+      }>(res);
 
       if (!res.ok) {
-        throw new Error(json.error || 'Gagal menghapus data');
+        throw new Error(json.detail || json.error || 'Gagal menghapus data');
       }
 
       setItems([]);
@@ -176,29 +238,15 @@ export default function Monitoring() {
   const monitoringData: MonitoringData[] = useMemo(() => {
     return physicalItems.map((item, index) => {
       const ultrasonicCm =
-        parseFloat(String(item.hcsr_cm ?? item.jarak_cm ?? 0)) || 0;
+        parseNumericValue(item.hcsr_cm ?? item.jarak_cm);
 
       const waterLevel =
-        parseFloat(String(item.water_level ?? 0)) || 0;
+        parseNumericValue(item.water_level);
 
       const servoAngle =
-        parseFloat(String(item.servo_angle ?? 0)) || 0;
+        parseNumericValue(item.servo_angle);
 
-      const rawGateStatus = String(item.gate_status ?? item.status ?? 'AMAN');
-
-      const gateStatus =
-        rawGateStatus === 'BAHAYA'
-          ? 'open'
-          : rawGateStatus === 'SIAGA'
-            ? 'half'
-            : 'closed';
-
-      const gateLabel =
-        rawGateStatus === 'BAHAYA'
-          ? 'Terbuka'
-          : rawGateStatus === 'SIAGA'
-            ? 'Separuh Terbuka'
-            : 'Tertutup';
+      const gateState = getGateState(item.gate_status ?? item.status);
 
       return {
         gateId: item.device_id || `Gate-${index + 1}`,
@@ -206,8 +254,8 @@ export default function Monitoring() {
         ultrasonicCm,
         waterStatus: String(item.water_status ?? '-'),
         systemStatus: String(item.status ?? '-'),
-        gateStatus,
-        gateLabel,
+        gateStatus: gateState.gateStatus,
+        gateLabel: gateState.gateLabel,
         servoAngle,
         lastUpdate: formatLastUpdate(item),
       };
@@ -215,6 +263,7 @@ export default function Monitoring() {
   }, [physicalItems]);
 
   const latest = monitoringData[0];
+  const latestSensorPayload = physicalItems[0];
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -355,6 +404,52 @@ export default function Monitoring() {
             </div>
           )}
 
+          <div className="mb-8 grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+            <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="mb-5">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Payload Sensor Terbaru
+                </h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Nilai threshold dan status terakhir dari payload ESP-001
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <PayloadValue
+                  label="water_siaga"
+                  value={formatPayloadValue(latestSensorPayload?.water_siaga)}
+                />
+                <PayloadValue
+                  label="water_bahaya"
+                  value={formatPayloadValue(latestSensorPayload?.water_bahaya)}
+                />
+                <PayloadValue
+                  label="hcsr_bahaya_cm"
+                  value={formatPayloadValue(latestSensorPayload?.hcsr_bahaya_cm, 'cm')}
+                />
+                <PayloadValue
+                  label="hcsr_siaga_cm"
+                  value={formatPayloadValue(latestSensorPayload?.hcsr_siaga_cm, 'cm')}
+                />
+                <PayloadValue
+                  label="gate_status"
+                  value={formatPayloadValue(latestSensorPayload?.gate_status)}
+                />
+                <PayloadValue
+                  label="status"
+                  value={formatPayloadValue(latestSensorPayload?.status)}
+                />
+                <PayloadValue
+                  label="water_status"
+                  value={formatPayloadValue(latestSensorPayload?.water_status)}
+                />
+              </div>
+            </section>
+
+            <ThresholdSettingsPanel />
+          </div>
+
           <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
             <div className="border-b border-gray-200 p-6">
               <h2 className="text-xl font-semibold text-gray-900">
@@ -480,6 +575,15 @@ export default function Monitoring() {
           </div>
         </div>
       </main>
+    </div>
+  );
+}
+
+function PayloadValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+      <p className="text-xs font-semibold uppercase text-gray-500">{label}</p>
+      <p className="mt-2 text-lg font-bold text-gray-900">{value}</p>
     </div>
   );
 }
