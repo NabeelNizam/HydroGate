@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
-import { getHdfsConfig, isMissingHdfsOutput, parseHdfsResult, runCommand } from "@/lib/hdfs-analisis";
+import { getHdfsConfig, isMissingHdfsOutput, parseHdfsResult, runSshCommand } from "@/lib/hdfs-analisis";
 
 export const runtime = "nodejs";
 
 export async function GET() {
   try {
     const config = getHdfsConfig();
-    const result = await runCommand(config.hdfsBin, ["dfs", "-cat", `${config.outputPath}/part-00000`]);
+    const result = await runSshCommand([config.hdfsBin, "dfs", "-cat", `${config.outputPath}/part-*`]);
     const data = parseHdfsResult(result.stdout);
 
     return NextResponse.json({

@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { FirebaseError } from "firebase/app"
 import { signInWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase"
-import { ArrowLeft, ArrowRight, Eye, EyeOff } from "lucide-react"
+import { Eye, EyeOff } from "lucide-react"
 
 export default function LoginPage() {
     const router = useRouter()
@@ -32,7 +32,7 @@ export default function LoginPage() {
 
             await signInWithEmailAndPassword(auth, email, password)
 
-            router.push("/dashboard")
+            router.push("/dashboard/monitoring")
         } catch (err: unknown) {
             if (err instanceof FirebaseError) {
                 switch (err.code) {

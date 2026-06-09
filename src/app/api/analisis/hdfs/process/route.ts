@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getHdfsConfig, runCommand } from "@/lib/hdfs-analisis";
+import { getHdfsConfig, runSshCommand } from "@/lib/hdfs-analisis";
 
 export const runtime = "nodejs";
 
@@ -7,8 +7,8 @@ export async function POST() {
   try {
     const config = getHdfsConfig();
 
-    await runCommand(config.hdfsBin, ["dfs", "-rm", "-r", "-f", config.outputPath]);
-    await runCommand(config.hadoopBin, ["jar", config.jarPath, config.mainClass, config.rawPath, config.outputPath]);
+    await runSshCommand([config.hdfsBin, "dfs", "-rm", "-r", "-f", config.outputPath]);
+    await runSshCommand([config.hadoopBin, "jar", config.jarPath, config.mainClass, config.rawPath, config.outputPath]);
 
     return NextResponse.json({
       success: true,

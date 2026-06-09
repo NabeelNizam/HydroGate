@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 import {
   BarChart3,
   CheckCircle2,
-  Clock3,
   Database,
   DownloadCloud,
   FileText,
@@ -12,27 +11,26 @@ import {
   PlayCircle,
   Send,
   ServerCog,
+  Terminal,
 } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 import Navbar from "../components/Navbar";
 
 interface AnalisisData {
-  device_id: string;
-  processed_at: string;
-  avg_water_level: number | null;
-  avg_jarak_cm: number | null;
-  dominant_status: string | null;
-  danger_count: number | null;
+  deviceId: string;
+  date: string;
+  status: string;
+  count: number;
 }
 
-interface SensorForm {
-  device_id: string;
-  water_level: string;
-  jarak_cm: string;
-  status: string;
-  gate_status: string;
-  timestamp: string;
-  datetime: string;
+type StatusKey = "AMAN" | "SIAGA" | "BAHAYA";
+
+interface ChartRow {
+  deviceId: string;
+  date: string;
+  AMAN: number;
+  SIAGA: number;
+  BAHAYA: number;
 }
 
 interface ApiResponse<T = unknown> {
@@ -42,29 +40,44 @@ interface ApiResponse<T = unknown> {
   error?: string;
 }
 
+interface SshTestChecks {
+  hostname: string;
+  whoami: string;
+  hdfsRoot: string;
+}
+
+interface SshTestResponse {
+  success?: boolean;
+  host?: string;
+  user?: string;
+  checks?: SshTestChecks;
+  message?: string;
+  error?: string;
+}
+
+interface HdfsWriteResponse {
+  success?: boolean;
+  message?: string;
+  error?: string;
+  totalItems?: number;
+  filename?: string;
+  hdfsPath?: string;
+  hdfsTarget?: string;
+}
+
 type ProcessStatus =
   | "Menunggu"
-  | "Mengirim JSON ke HDFS"
+  | "Mengambil data DynamoDB"
   | "Berhasil menulis ke HDFS"
   | "Menjalankan analisis"
   | "Analisis selesai"
   | "Berhasil membaca hasil"
   | "Error";
 
-const initialForm: SensorForm = {
-  device_id: "ESP-001",
-  water_level: "68",
-  jarak_cm: "25",
-  status: "SIAGA",
-  gate_status: "TERBUKA",
-  timestamp: "1780839200",
-  datetime: "2026-06-07 21:00:00",
-};
-
 const bigDataSteps = [
   "Web Dashboard",
   "API Next.js",
-  "File JSON",
+  "File CSV",
   "HDFS",
   "MapReduce/Spark",
   "Output Analisis",
@@ -74,13 +87,14 @@ const bigDataSteps = [
 const hdfsOperations = [
   {
     badge: "Write",
-    title: "Write Data Sensor",
+    title: "Write Data DynamoDB",
     description:
-      "Data histori dari perangkat HydroGate dikirim dalam bentuk JSON ke API, lalu API menyimpannya ke HDFS sebagai data mentah untuk kebutuhan analisis.",
+      "Data histori perangkat HydroGate diambil dari DynamoDB oleh API server, diubah menjadi CSV sederhana, lalu dikirim ke HDFS sebagai data mentah untuk kebutuhan analisis.",
     command: [
       "POST /api/analisis/hdfs/write",
-      "hdfs dfs -mkdir -p /hydrogate/raw",
-      "hdfs dfs -put -f tmp/hydrogate/hydrogate-{timestamp}.json /hydrogate/raw/",
+      "scp tmp/hydrogate/hydrogate-dynamodb-{timestamp}.csv hadoopuser@192.168.1.109:/tmp/",
+      "ssh hadoopuser@192.168.1.109 /usr/local/hadoop/bin/hdfs dfs -mkdir -p /hydrogate/raw",
+      "ssh hadoopuser@192.168.1.109 /usr/local/hadoop/bin/hdfs dfs -put -f /tmp/hydrogate-dynamodb-{timestamp}.csv /hydrogate/raw/",
     ],
     icon: Database,
   },
@@ -91,8 +105,8 @@ const hdfsOperations = [
       "Data yang sudah tersimpan diproses menggunakan MapReduce atau Spark untuk menghasilkan ringkasan kondisi air.",
     command: [
       "POST /api/analisis/hdfs/process",
-      "hdfs dfs -rm -r -f /hydrogate/output",
-      "hadoop jar hydrogate.jar id.ac.polinema.App /hydrogate/raw /hydrogate/output",
+      "ssh hadoopuser@192.168.1.109 /usr/local/hadoop/bin/hdfs dfs -rm -r -f /hydrogate/output",
+      "ssh hadoopuser@192.168.1.109 /usr/local/hadoop/bin/hadoop jar /home/hadoopuser/hydrogate.jar id.ac.polinema.App /hydrogate/raw /hydrogate/output",
     ],
     icon: ServerCog,
   },
@@ -101,80 +115,104 @@ const hdfsOperations = [
     title: "Read Result",
     description:
       "Hasil analisis dibaca kembali oleh API agar dashboard dapat menampilkan insight seperti status banjir, rata-rata tinggi air, dan jumlah kondisi bahaya.",
-    command: ["GET /api/analisis/hdfs/result", "hdfs dfs -cat /hydrogate/output/part-00000"],
+    command: [
+      "GET /api/analisis/hdfs/result",
+      "ssh hadoopuser@192.168.1.109 /usr/local/hadoop/bin/hdfs dfs -cat /hydrogate/output/part-*",
+    ],
     icon: FileText,
   },
 ];
+
+const ALL_DEVICES = "Semua Device";
+const DEFAULT_DEVICE_OPTIONS = ["ESP-001"];
+const STATUS_KEYS: StatusKey[] = ["AMAN", "SIAGA", "BAHAYA"];
+const STATUS_COLORS: Record<StatusKey, string> = {
+  AMAN: "#059669",
+  SIAGA: "#d97706",
+  BAHAYA: "#dc2626",
+};
 
 function formatValue(value: number | null | undefined, suffix = "") {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return "-";
   }
 
-  return `${value}${suffix}`;
-}
-
-function formatDate(value: string | null | undefined) {
-  if (!value) {
-    return "-";
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString("id-ID", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
+  return `${value.toLocaleString("id-ID")}${suffix}`;
 }
 
 function getSummary(data: AnalisisData[]) {
-  const totalDataSensor = data.length > 0 ? data.length : "-";
-  const jumlahDevice = data.length > 0 ? new Set(data.map((item) => item.device_id).filter(Boolean)).size : "-";
-  const statusCounter = data.reduce<Record<string, number>>((acc, item) => {
-    const status = item.dominant_status?.trim();
-
-    if (!status) {
-      return acc;
-    }
-
-    acc[status] = (acc[status] || 0) + 1;
-    return acc;
-  }, {});
-
-  const statusDominan =
-    Object.entries(statusCounter).sort((a, b) => b[1] - a[1])[0]?.[0] || "Belum tersedia";
-
-  const latestProcessed = data
-    .map((item) => item.processed_at)
-    .filter(Boolean)
-    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0];
+  const totals = getStatusTotals(data);
 
   return [
     {
-      label: "Total Data Sensor",
-      value: totalDataSensor,
-      icon: Database,
-    },
-    {
-      label: "Jumlah Device",
-      value: jumlahDevice,
-      icon: Layers3,
-    },
-    {
-      label: "Status Dominan",
-      value: statusDominan,
+      label: "Total AMAN",
+      value: data.length > 0 ? formatValue(totals.AMAN) : "-",
       icon: CheckCircle2,
     },
     {
-      label: "Terakhir Diproses",
-      value: latestProcessed ? formatDate(latestProcessed) : "Belum tersedia",
-      icon: Clock3,
+      label: "Total SIAGA",
+      value: data.length > 0 ? formatValue(totals.SIAGA) : "-",
+      icon: Layers3,
+    },
+    {
+      label: "Total BAHAYA",
+      value: data.length > 0 ? formatValue(totals.BAHAYA) : "-",
+      icon: FileText,
     },
   ];
+}
+
+function getStatusTotals(data: AnalisisData[]) {
+  return data.reduce<Record<StatusKey, number>>(
+    (acc, item) => {
+      if (STATUS_KEYS.includes(item.status as StatusKey)) {
+        acc[item.status as StatusKey] += item.count;
+      }
+
+      return acc;
+    },
+    {
+      AMAN: 0,
+      SIAGA: 0,
+      BAHAYA: 0,
+    }
+  );
+}
+
+function buildChartData(data: AnalisisData[]): ChartRow[] {
+  const grouped = new Map<string, ChartRow>();
+
+  data.forEach((item) => {
+    if (!STATUS_KEYS.includes(item.status as StatusKey)) {
+      return;
+    }
+
+    const deviceId = item.deviceId || "-";
+    const date = item.date || "-";
+    const key = `${deviceId}|${date}`;
+    const existing =
+      grouped.get(key) ||
+      ({
+        deviceId,
+        date,
+        AMAN: 0,
+        SIAGA: 0,
+        BAHAYA: 0,
+      } satisfies ChartRow);
+
+    existing[item.status as StatusKey] += item.count;
+    grouped.set(key, existing);
+  });
+
+  return [...grouped.values()].sort((a, b) => {
+    const byDate = a.date.localeCompare(b.date);
+    return byDate !== 0 ? byDate : a.deviceId.localeCompare(b.deviceId);
+  });
+}
+
+function getChartMax(data: ChartRow[]) {
+  const maxValue = Math.max(...data.flatMap((item) => STATUS_KEYS.map((status) => item[status])), 0);
+  return maxValue > 0 ? maxValue : 1;
 }
 
 function statusClass(status: ProcessStatus) {
@@ -186,66 +224,69 @@ function statusClass(status: ProcessStatus) {
     return "border-gray-200 bg-gray-50 text-gray-700";
   }
 
-  if (status === "Mengirim JSON ke HDFS" || status === "Menjalankan analisis") {
+  if (status === "Mengambil data DynamoDB" || status === "Menjalankan analisis") {
     return "border-cyan-200 bg-cyan-50 text-cyan-700";
   }
 
   return "border-emerald-200 bg-emerald-50 text-emerald-700";
 }
 
-function buildSensorPayload(form: SensorForm) {
-  return {
-    device_id: form.device_id.trim(),
-    water_level: form.water_level.trim() === "" ? "" : Number(form.water_level),
-    jarak_cm: form.jarak_cm.trim() === "" ? "" : Number(form.jarak_cm),
-    status: form.status.trim(),
-    gate_status: form.gate_status.trim(),
-    timestamp: form.timestamp.trim() === "" ? "" : Number(form.timestamp),
-    datetime: form.datetime.trim(),
-  };
-}
-
 export default function DashboardAnalisis() {
   const [analisisData, setAnalisisData] = useState<AnalisisData[]>([]);
-  const [form, setForm] = useState<SensorForm>(initialForm);
   const [processStatus, setProcessStatus] = useState<ProcessStatus>("Menunggu");
-  const [message, setMessage] = useState("Isi JSON sensor, lalu kirim ke HDFS untuk memulai alur analisis.");
-  const [loadingAction, setLoadingAction] = useState<"write" | "process" | "result" | null>(null);
+  const [message, setMessage] = useState("Ambil data sensor dari DynamoDB, lalu kirim ke HDFS untuk memulai alur analisis.");
+  const [loadingAction, setLoadingAction] = useState<"write" | "process" | "result" | "sshTest" | null>(null);
+  const [sshTestResult, setSshTestResult] = useState<SshTestResponse | null>(null);
+  const [writeSummary, setWriteSummary] = useState<HdfsWriteResponse | null>(null);
+  const [selectedDevice, setSelectedDevice] = useState(ALL_DEVICES);
 
-  const summaryCards = useMemo(() => getSummary(analisisData), [analisisData]);
+  const deviceOptions = useMemo(() => {
+    const devices = new Set(DEFAULT_DEVICE_OPTIONS);
 
-  const updateForm = (field: keyof SensorForm, value: string) => {
-    setForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
+    analisisData.forEach((item) => {
+      if (item.deviceId) {
+        devices.add(item.deviceId);
+      }
+    });
+
+    return [ALL_DEVICES, ...[...devices].sort((a, b) => a.localeCompare(b))];
+  }, [analisisData]);
+
+  const filteredData = useMemo(() => {
+    if (selectedDevice === ALL_DEVICES) {
+      return analisisData;
+    }
+
+    return analisisData.filter((item) => item.deviceId === selectedDevice);
+  }, [analisisData, selectedDevice]);
+
+  const chartData = useMemo(() => buildChartData(filteredData), [filteredData]);
+  const chartMax = useMemo(() => getChartMax(chartData), [chartData]);
+  const summaryCards = useMemo(() => getSummary(filteredData), [filteredData]);
 
   const handleWrite = async () => {
     try {
       setLoadingAction("write");
-      setProcessStatus("Mengirim JSON ke HDFS");
-      setMessage("Mengirim JSON sensor ke API untuk disimpan ke HDFS...");
+      setProcessStatus("Mengambil data DynamoDB");
+      setMessage("Mengambil data sensor dari DynamoDB, membuat CSV, lalu mengirim ke HDFS...");
+      setWriteSummary(null);
 
       const response = await fetch("/api/analisis/hdfs/write", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(buildSensorPayload(form)),
       });
 
-      const json: ApiResponse = await response.json();
+      const json: HdfsWriteResponse = await response.json();
 
       if (!response.ok || !json.success) {
-        throw new Error(json.message || json.error || "Gagal menulis JSON ke HDFS.");
+        throw new Error(json.message || json.error || "Gagal mengambil data DynamoDB dan mengirim ke HDFS.");
       }
 
+      setWriteSummary(json);
       setProcessStatus("Berhasil menulis ke HDFS");
-      setMessage(json.message || "Berhasil menulis JSON sensor ke HDFS.");
+      setMessage(json.message || "Berhasil mengambil data DynamoDB dan mengirim CSV ke HDFS.");
     } catch (error) {
       setProcessStatus("Error");
-      setMessage(error instanceof Error ? error.message : "Gagal menulis JSON ke HDFS.");
+      setMessage(error instanceof Error ? error.message : "Gagal mengambil data DynamoDB dan mengirim CSV ke HDFS.");
     } finally {
       setLoadingAction(null);
     }
@@ -299,6 +340,36 @@ export default function DashboardAnalisis() {
     } catch (error) {
       setProcessStatus("Error");
       setMessage(error instanceof Error ? error.message : "Gagal membaca hasil analisis HDFS.");
+    } finally {
+      setLoadingAction(null);
+    }
+  };
+
+  const handleSshTest = async () => {
+    try {
+      setLoadingAction("sshTest");
+      setSshTestResult(null);
+
+      const response = await fetch("/api/analisis/hdfs/ssh-test", {
+        method: "POST",
+      });
+
+      const json: SshTestResponse = await response.json();
+
+      if (!response.ok || !json.success) {
+        throw new Error(json.error || json.message || "Gagal koneksi SSH ke VM Hadoop.");
+      }
+
+      setSshTestResult(json);
+    } catch (error) {
+      setSshTestResult({
+        success: false,
+        message: "Gagal koneksi SSH ke VM Hadoop.",
+        error:
+          error instanceof Error
+            ? `${error.message} Pastikan SSH tanpa password dari terminal server Next.js ke VM Hadoop sudah aktif.`
+            : "Pastikan SSH tanpa password dari terminal server Next.js ke VM Hadoop sudah aktif.",
+      });
     } finally {
       setLoadingAction(null);
     }
@@ -358,9 +429,71 @@ export default function DashboardAnalisis() {
 
             <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-5 shadow-sm">
               <p className="text-sm leading-6 text-cyan-900">
-                Data dari dashboard dikirim dalam format JSON ke API server, lalu API menyimpan file tersebut ke HDFS. Setelah itu data diproses menggunakan MapReduce/Spark dan hasilnya ditampilkan kembali di dashboard.
+                Data histori diambil dari DynamoDB oleh API server, diubah menjadi CSV, lalu disimpan ke HDFS. Setelah itu data diproses menggunakan MapReduce/Spark dan hasilnya ditampilkan kembali di dashboard.
               </p>
             </div>
+          </section>
+
+          <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Koneksi Hadoop NameNode</h2>
+                <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-600">
+                  Test koneksi SSH dari API server Next.js ke VM Hadoop NameNode, lalu baca hostname, user aktif, dan root HDFS.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSshTest}
+                disabled={actionDisabled}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400 sm:w-fit"
+              >
+                <Terminal className="h-4 w-4" />
+                {loadingAction === "sshTest" ? "Mengetes..." : "Test Koneksi Hadoop"}
+              </button>
+            </div>
+
+            {loadingAction === "sshTest" && (
+              <div className="mt-5 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-800">
+                Menghubungi VM Hadoop melalui API server Next.js...
+              </div>
+            )}
+
+            {sshTestResult?.success && sshTestResult.checks && (
+              <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-3">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Hostname</p>
+                  <p className="mt-2 break-words text-sm font-semibold text-emerald-950">{sshTestResult.checks.hostname || "-"}</p>
+                </div>
+
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Whoami</p>
+                  <p className="mt-2 break-words text-sm font-semibold text-emerald-950">{sshTestResult.checks.whoami || "-"}</p>
+                </div>
+
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Target</p>
+                  <p className="mt-2 break-words text-sm font-semibold text-emerald-950">
+                    {sshTestResult.user}@{sshTestResult.host}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-800 bg-slate-950 p-4 lg:col-span-3">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-cyan-200">HDFS Root</p>
+                  <pre className="max-h-72 overflow-auto whitespace-pre-wrap text-xs leading-6 text-cyan-100">
+                    <code>{sshTestResult.checks.hdfsRoot || "-"}</code>
+                  </pre>
+                </div>
+              </div>
+            )}
+
+            {sshTestResult && !sshTestResult.success && (
+              <div className="mt-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm leading-6 text-red-800">
+                <p className="font-semibold">{sshTestResult.message || "Gagal koneksi SSH ke VM Hadoop."}</p>
+                <p className="mt-1 break-words">{sshTestResult.error || "Pastikan SSH tanpa password sudah aktif."}</p>
+              </div>
+            )}
           </section>
 
           <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
@@ -393,9 +526,9 @@ export default function DashboardAnalisis() {
           <section className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
             <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <h2 className="text-xl font-semibold text-gray-900">Kirim JSON Sensor ke HDFS</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Kirim Data DynamoDB ke HDFS</h2>
                 <p className="mt-1 max-w-3xl text-sm leading-6 text-gray-600">
-                  Isi data sensor sederhana, lalu kirim ke API Next.js. API akan membuat file JSON lokal sementara dan mengunggahnya ke folder raw HDFS.
+                  API Next.js mengambil data sensor dari DynamoDB, membuat file CSV, mengirimnya ke NameNode melalui SCP, lalu memasukkannya ke folder raw HDFS.
                 </p>
               </div>
 
@@ -404,88 +537,24 @@ export default function DashboardAnalisis() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-gray-700">Device ID</span>
-                <input
-                  value={form.device_id}
-                  onChange={(event) => updateForm("device_id", event.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-                  placeholder="ESP-001"
-                />
-              </label>
+            {writeSummary?.success && (
+              <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Total DynamoDB</p>
+                  <p className="mt-2 break-words text-lg font-bold text-emerald-950">{writeSummary.totalItems ?? 0}</p>
+                </div>
 
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-gray-700">Water Level</span>
-                <input
-                  value={form.water_level}
-                  onChange={(event) => updateForm("water_level", event.target.value)}
-                  type="number"
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-                  placeholder="68"
-                />
-              </label>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Nama File</p>
+                  <p className="mt-2 break-words text-sm font-semibold text-emerald-950">{writeSummary.filename || "-"}</p>
+                </div>
 
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-gray-700">Jarak Air</span>
-                <input
-                  value={form.jarak_cm}
-                  onChange={(event) => updateForm("jarak_cm", event.target.value)}
-                  type="number"
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-                  placeholder="25"
-                />
-              </label>
-
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-gray-700">Status</span>
-                <select
-                  value={form.status}
-                  onChange={(event) => updateForm("status", event.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-                >
-                  <option value="">Pilih status</option>
-                  <option value="AMAN">AMAN</option>
-                  <option value="SIAGA">SIAGA</option>
-                  <option value="BAHAYA">BAHAYA</option>
-                </select>
-              </label>
-
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-gray-700">Gate Status</span>
-                <select
-                  value={form.gate_status}
-                  onChange={(event) => updateForm("gate_status", event.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-                >
-                  <option value="">Pilih gate</option>
-                  <option value="TERTUTUP">TERTUTUP</option>
-                  <option value="SEPARUH TERBUKA">SEPARUH TERBUKA</option>
-                  <option value="TERBUKA">TERBUKA</option>
-                </select>
-              </label>
-
-              <label className="space-y-2">
-                <span className="text-sm font-medium text-gray-700">Timestamp</span>
-                <input
-                  value={form.timestamp}
-                  onChange={(event) => updateForm("timestamp", event.target.value)}
-                  type="number"
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-                  placeholder="1780839200"
-                />
-              </label>
-
-              <label className="space-y-2 md:col-span-2">
-                <span className="text-sm font-medium text-gray-700">Datetime</span>
-                <input
-                  value={form.datetime}
-                  onChange={(event) => updateForm("datetime", event.target.value)}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
-                  placeholder="2026-06-07 21:00:00"
-                />
-              </label>
-            </div>
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Target HDFS</p>
+                  <p className="mt-2 break-words text-sm font-semibold text-emerald-950">{writeSummary.hdfsTarget || "/hydrogate/raw"}</p>
+                </div>
+              </div>
+            )}
 
             <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="rounded-xl border border-gray-200 bg-slate-50 px-4 py-3 text-sm leading-6 text-gray-700">
@@ -500,7 +569,7 @@ export default function DashboardAnalisis() {
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:bg-cyan-300"
                 >
                   <Send className="h-4 w-4" />
-                  {loadingAction === "write" ? "Mengirim..." : "Kirim JSON ke HDFS"}
+                  {loadingAction === "write" ? "Mengirim..." : "Ambil Data DynamoDB & Kirim ke HDFS"}
                 </button>
 
                 <button
@@ -567,34 +636,110 @@ export default function DashboardAnalisis() {
           </section>
 
           <section className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-            <div className="border-b border-gray-200 p-6">
-              <h2 className="text-xl font-semibold text-gray-900">Hasil Analisis</h2>
-              <p className="mt-1 text-sm text-gray-600">
-                Ringkasan hasil pengolahan histori sensor dari HDFS.
-              </p>
+            <div className="flex flex-col gap-4 border-b border-gray-200 p-6 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Hasil Analisis</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Ringkasan status per device dan tanggal dari output MapReduce HDFS.
+                </p>
+              </div>
+
+              <label className="w-full space-y-2 sm:w-72">
+                <span className="text-xs font-semibold uppercase tracking-wide text-gray-600">Filter Device</span>
+                <select
+                  value={selectedDevice}
+                  onChange={(event) => setSelectedDevice(event.target.value)}
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-semibold text-gray-900 outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-100"
+                >
+                  {deviceOptions.map((device) => (
+                    <option key={device} value={device}>
+                      {device}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
 
+            {analisisData.length > 0 && (
+              <div className="border-b border-gray-200 p-6">
+                <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900">Grafik Status Harian</h3>
+                    <p className="mt-1 text-sm text-gray-600">
+                      X axis tanggal, series AMAN/SIAGA/BAHAYA, difilter berdasarkan device.
+                    </p>
+                  </div>
+                  <div className="text-sm font-semibold text-gray-700">
+                    {selectedDevice === ALL_DEVICES ? "Semua device" : selectedDevice}
+                  </div>
+                </div>
+
+                {chartData.length > 0 ? (
+                  <div className="min-h-80 overflow-x-auto rounded-xl border border-gray-200 bg-slate-50 p-4">
+                    <div className="mb-4 flex flex-wrap items-center gap-4">
+                      {STATUS_KEYS.map((status) => (
+                        <div key={status} className="flex items-center gap-2 text-xs font-semibold text-gray-700">
+                          <span
+                            className="h-3 w-3 rounded-sm"
+                            style={{ backgroundColor: STATUS_COLORS[status] }}
+                          />
+                          {status}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex min-h-64 min-w-[720px] items-end gap-5 border-b border-l border-gray-200 px-4 pb-8">
+                      {chartData.map((item) => (
+                        <div key={`${item.deviceId}-${item.date}`} className="flex min-w-28 flex-1 flex-col items-center">
+                          <div className="flex h-52 w-full items-end justify-center gap-2">
+                            {STATUS_KEYS.map((status) => {
+                              const value = item[status];
+                              const height = value > 0 ? Math.max((value / chartMax) * 100, 4) : 0;
+
+                              return (
+                                <div
+                                  key={status}
+                                  title={`${item.deviceId} - ${item.date} - ${status}: ${formatValue(value)}`}
+                                  className="w-6 rounded-t transition"
+                                  style={{
+                                    backgroundColor: STATUS_COLORS[status],
+                                    height: `${height}%`,
+                                  }}
+                                />
+                              );
+                            })}
+                          </div>
+                          <div className="mt-3 max-w-32 truncate text-center text-xs font-semibold text-gray-800">{item.date}</div>
+                          <div className="mt-1 max-w-32 truncate text-center text-[11px] text-gray-500">{item.deviceId}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex min-h-40 items-center justify-center rounded-xl border border-gray-200 bg-slate-50 px-6 py-8 text-center text-sm text-gray-600">
+                    Tidak ada data untuk device yang dipilih.
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-left">
+              <table className="w-full min-w-[760px] text-left">
                 <thead className="border-b border-gray-200 bg-gray-50 text-sm text-gray-700">
                   <tr>
-                    <th className="px-6 py-3 font-semibold">Waktu</th>
                     <th className="px-6 py-3 font-semibold">Device ID</th>
-                    <th className="px-6 py-3 font-semibold">Rata-rata Water Level</th>
-                    <th className="px-6 py-3 font-semibold">Rata-rata Jarak Air</th>
-                    <th className="px-6 py-3 font-semibold">Status Dominan</th>
-                    <th className="px-6 py-3 font-semibold">Jumlah Bahaya</th>
+                    <th className="px-6 py-3 font-semibold">Tanggal</th>
+                    <th className="px-6 py-3 font-semibold">Status</th>
+                    <th className="px-6 py-3 font-semibold">Jumlah</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {analisisData.map((item, index) => (
-                    <tr key={`${item.device_id}-${item.processed_at}-${index}`} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 text-sm text-gray-600">{formatDate(item.processed_at)}</td>
-                      <td className="px-6 py-4 text-sm font-semibold text-gray-900">{item.device_id || "-"}</td>
-                      <td className="px-6 py-4 text-sm text-gray-700">{formatValue(item.avg_water_level)}</td>
-                      <td className="px-6 py-4 text-sm text-gray-700">{formatValue(item.avg_jarak_cm, " cm")}</td>
-                      <td className="px-6 py-4 text-sm text-gray-700">{item.dominant_status || "-"}</td>
-                      <td className="px-6 py-4 text-sm text-gray-700">{formatValue(item.danger_count)}</td>
+                  {filteredData.map((item, index) => (
+                    <tr key={`${item.deviceId}-${item.date}-${item.status}-${index}`} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 text-sm font-semibold text-gray-900">{item.deviceId || "-"}</td>
+                      <td className="px-6 py-4 text-sm text-gray-700">{item.date || "-"}</td>
+                      <td className="px-6 py-4 text-sm font-semibold text-gray-900">{item.status || "-"}</td>
+                      <td className="px-6 py-4 text-sm text-gray-700">{formatValue(item.count)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -608,6 +753,12 @@ export default function DashboardAnalisis() {
                   <p className="max-w-xl text-sm leading-6 text-gray-600">
                     Belum ada hasil analisis HDFS. Jalankan proses MapReduce atau Spark terlebih dahulu.
                   </p>
+                </div>
+              )}
+
+              {analisisData.length > 0 && filteredData.length === 0 && (
+                <div className="flex min-h-32 items-center justify-center px-6 py-8 text-center text-sm text-gray-600">
+                  Tidak ada hasil analisis untuk device yang dipilih.
                 </div>
               )}
             </div>
